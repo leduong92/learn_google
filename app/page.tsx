@@ -9,24 +9,16 @@ export default function Home() {
           <p className="text-sm font-medium text-accent">Bộ sưu tập Thu Đông</p>
           <h1 className="mt-2 text-4xl font-bold tracking-tight md:text-5xl">Nội thất gỗ cho ngôi nhà chậm rãi.</h1>
           <p className="mt-4 max-w-lg text-muted">
-            Cửa hàng giả lập để học tracking. Đi hết hành trình xem sản phẩm → giỏ hàng → checkout → mua hàng, và
-            quan sát từng event trong nút <span className="font-mono text-foreground">dataLayer</span> ở góc phải.
+            Cửa hàng giả lập để học tracking: xem sản phẩm → giỏ hàng → checkout → mua hàng. Nút{" "}
+            <span className="font-mono text-foreground">dataLayer</span> ở góc phải cho bạn thấy những gì mình đã push.
           </p>
         </div>
         <div className="card p-5 text-sm">
-          <p className="font-semibold">Bắt đầu học trong 3 bước</p>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted">
-            <li>
-              <Link href="/lab/settings" className="text-accent underline underline-offset-2">Nhập GTM container ID</Link>
-            </li>
-            <li>
-              <Link href="/lab/ads" className="text-accent underline underline-offset-2">Giả lập 1 click quảng cáo</Link> rồi
-              mua hàng
-            </li>
-            <li>
-              <Link href="/lab/funnel" className="text-accent underline underline-offset-2">Xem phễu &amp; ROAS</Link> để tối ưu
-            </li>
-          </ol>
+          <p className="font-semibold">Bắt đầu học</p>
+          <p className="mt-2 text-muted">
+            Website chưa có tracking nào. Bạn sẽ tự nhúng GTM và tự viết từng sự kiện, theo 10 bài từ dễ đến khó.
+          </p>
+          <Link href="/lab/guide" className="btn-primary mt-4">Mở Bài 0 →</Link>
         </div>
       </section>
 

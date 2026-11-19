@@ -6,7 +6,6 @@ import { cartStore } from "@/lib/lab-state";
 import { computeTotals } from "@/lib/cart";
 import { formatVND } from "@/lib/products";
 import { useHydrated, useTrackOnce } from "@/lib/hooks";
-import { linesToItems, toItem, trackEcommerce } from "@/lib/tracking";
 import { ProductImage } from "@/components/ProductImage";
 
 export default function CartPage() {
@@ -16,10 +15,10 @@ export default function CartPage() {
   const [couponInput, setCouponInput] = useState("");
   const [couponError, setCouponError] = useState("");
 
-  // view_cart: chỉ bắn sau khi đã đọc giỏ từ localStorage (hydrated)
+  // Chạy 1 lần, SAU khi giỏ hàng đã được đọc từ localStorage (hydrated)
   useTrackOnce(hydrated ? "view_cart" : null, () => {
     if (cart.lines.length === 0) return;
-    trackEcommerce("view_cart", { value, items: linesToItems(cart.lines, cart.coupon) });
+    // TODO Bài 4 — push event "view_cart" (value = `value`, items = các dòng trong `resolved`)
   });
 
   function changeQty(index: number, nextQty: number) {
@@ -30,12 +29,8 @@ export default function CartPage() {
       ...c,
       lines: nextQty <= 0 ? c.lines.filter((_, i) => i !== index) : c.lines.map((l, i) => (i === index ? { ...l, quantity: nextQty } : l)),
     }));
-    // Tăng → add_to_cart, giảm/xoá → remove_from_cart (chỉ với phần chênh lệch)
-    const item = toItem(line.product, { variant: line.variant, quantity: Math.abs(diff) });
-    trackEcommerce(diff > 0 ? "add_to_cart" : "remove_from_cart", {
-      value: line.product.price * Math.abs(diff),
-      items: [item],
-    });
+    // TODO Bài 4 — diff > 0 → push "add_to_cart", diff < 0 → push "remove_from_cart"
+    //   Sản phẩm: line.product, phiên bản: line.variant, số lượng thay đổi: Math.abs(diff)
   }
 
   function applyCoupon(e: React.FormEvent) {
@@ -126,7 +121,7 @@ export default function CartPage() {
             <div className="flex justify-between border-t border-line pt-2 font-semibold"><dt>Tổng (chưa ship)</dt><dd className="tabular-nums">{formatVND(value)}</dd></div>
           </dl>
           <Link href="/checkout" className="btn-primary mt-5 w-full py-3">Tiến hành thanh toán</Link>
-          <p className="mt-2 text-xs text-muted">→ trang checkout sẽ bắn <code className="font-mono">begin_checkout</code></p>
+          
         </aside>
       </div>
     </div>

@@ -5,7 +5,6 @@ import { useState } from "react";
 import { formatVND, type Product } from "@/lib/products";
 import { cartStore } from "@/lib/lab-state";
 import { useTrackOnce } from "@/lib/hooks";
-import { toItem, trackEcommerce } from "@/lib/tracking";
 import { ProductImage } from "@/components/ProductImage";
 
 export function ProductDetail({ product: p }: { product: Product }) {
@@ -13,9 +12,9 @@ export function ProductDetail({ product: p }: { product: Product }) {
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
 
-  // view_item: xem trang chi tiết sản phẩm
+  // Chạy 1 lần khi mở trang sản phẩm
   useTrackOnce(p.id, () => {
-    trackEcommerce("view_item", { value: p.price, items: [toItem(p, { variant: p.variants[0] })] });
+    // TODO Bài 4 — push event "view_item" cho sản phẩm `p` (value = p.price)
   });
 
   function addToCart() {
@@ -26,11 +25,9 @@ export function ProductDetail({ product: p }: { product: Product }) {
       else lines.push({ productId: p.id, variant, quantity: qty });
       return { ...c, lines };
     });
-    // add_to_cart: value = price × quantity của phần vừa thêm
-    trackEcommerce("add_to_cart", {
-      value: p.price * qty,
-      items: [toItem(p, { variant, quantity: qty })],
-    });
+    // TODO Bài 3 — push event "add_to_cart" ĐẦU TIÊN của bạn ở đây
+    //   Dữ liệu có sẵn: p (sản phẩm), variant (phiên bản), qty (số lượng)
+    //   value = p.price * qty
     setAdded(true);
   }
 
@@ -90,7 +87,7 @@ export function ProductDetail({ product: p }: { product: Product }) {
 
         {added && (
           <div className="mt-4 flex items-center gap-3 rounded-lg bg-[#e8efe8] px-4 py-3 text-sm">
-            <span>Đã thêm vào giỏ. Event <code className="font-mono">add_to_cart</code> đã được push.</span>
+            <span>Đã thêm vào giỏ.</span>
             <Link href="/cart" className="ml-auto font-semibold text-accent underline underline-offset-2">
               Xem giỏ →
             </Link>

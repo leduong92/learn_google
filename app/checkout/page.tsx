@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { attributionStore, cartStore, saveLastOrder, type Order } from "@/lib/lab-state";
+import { cartStore, saveLastOrder, type Order } from "@/lib/lab-state";
 import { computeTotals } from "@/lib/cart";
 import { PAYMENT_OPTIONS, SHIPPING_OPTIONS, formatVND } from "@/lib/products";
 import { useHydrated, useTrackOnce } from "@/lib/hooks";
-import { currentChannel, linesToItems, trackEcommerce } from "@/lib/tracking";
 
 type Customer = Order["customer"];
 
@@ -46,32 +45,28 @@ export default function CheckoutPage() {
   const payment = PAYMENT_OPTIONS.find((p) => p.id === paymentId)!;
   const { resolved, subtotal, discount, value, total, couponValid } = computeTotals(cart.lines, cart.coupon, shipping.price);
   const coupon = couponValid ? cart.coupon : "";
-  const items = linesToItems(cart.lines, coupon);
 
-  // begin_checkout: vào trang checkout với giỏ có hàng
+  // Chạy 1 lần khi vào checkout với giỏ có hàng
   useTrackOnce(hydrated && cart.lines.length > 0 ? "begin_checkout" : null, () => {
-    trackEcommerce("begin_checkout", { value, coupon: coupon || undefined, items });
+    // TODO Bài 4 — push event "begin_checkout" (value, coupon, items từ `resolved`)
   });
 
   function submitInfo(e: React.FormEvent) {
     e.preventDefault();
-    // add_shipping_info: hoàn thành bước địa chỉ + chọn phương thức giao hàng
-    trackEcommerce("add_shipping_info", { value, coupon: coupon || undefined, shipping_tier: shipping.id, items });
+    // TODO Bài 4 — push event "add_shipping_info" (thêm shipping_tier = shipping.id)
     setStep("payment");
     window.scrollTo({ top: 0 });
   }
 
   function placeOrder() {
     setPlacing(true);
-    // add_payment_info: chọn/nhập phương thức thanh toán
-    trackEcommerce("add_payment_info", { value, coupon: coupon || undefined, payment_type: payment.id, items });
+    // TODO Bài 4 — push event "add_payment_info" (thêm payment_type = payment.id)
 
     const known: string[] = JSON.parse(localStorage.getItem("lab_customers") || "[]");
     const email = customer.email.trim().toLowerCase();
     const isNew = !known.includes(email);
     if (isNew) localStorage.setItem("lab_customers", JSON.stringify([...known, email]));
 
-    const last = attributionStore.get().last;
     const order: Order = {
       ...newOrderMeta(),
       items: resolved.map((l) => ({ productId: l.productId, variant: l.variant, quantity: l.quantity, price: l.product.price })),
@@ -83,8 +78,7 @@ export default function CheckoutPage() {
       payment_type: payment.id,
       value,
       customer,
-      channel: currentChannel(),
-      gclid: last?.gclid,
+      channel: "",
       tracked: false,
       new_customer: isNew,
       ec_consent: ecConsent,
@@ -214,7 +208,7 @@ export default function CheckoutPage() {
             <button className="btn-primary w-full py-3" onClick={placeOrder} disabled={placing}>
               {placing ? "Đang xử lý…" : `Đặt hàng — ${formatVND(total)}`}
             </button>
-            <p className="text-xs text-muted">Không có thanh toán thật. Bấm sẽ bắn <code className="font-mono">add_payment_info</code>, rồi trang cảm ơn bắn <code className="font-mono">purchase</code>.</p>
+            <p className="text-xs text-muted">Không có thanh toán thật. Bấm sẽ chuyển sang trang cảm ơn.</p>
           </div>
         )}
 

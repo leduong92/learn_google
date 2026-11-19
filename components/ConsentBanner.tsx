@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { consentStore, type ConsentState } from "@/lib/lab-state";
-import { pushDL } from "@/lib/tracking";
 import { useHydrated } from "@/lib/hooks";
 
 const g = (b: boolean) => (b ? "granted" : "denied") as "granted" | "denied";
@@ -20,11 +19,10 @@ export function ConsentBanner() {
   if (!hydrated || consent.decided) return null;
 
   function apply(state: ConsentState) {
-    // Consent Mode v2: gtag('consent','update',...) → GTM tự điều chỉnh hành vi các tag Google
-    window.gtag("consent", "update", state);
-    // Thêm 1 custom event để bạn có thể dùng làm trigger cho tag không phải của Google
-    pushDL({ event: "consent_update", consent_state: state });
     consentStore.set({ decided: true, state });
+    // TODO Bài 7 — báo cho Google biết lựa chọn của người dùng:
+    //   gtag('consent', 'update', state)
+    //   và (tuỳ chọn) push event "consent_update" để làm trigger cho tag ngoài Google
   }
 
   return (
@@ -43,9 +41,6 @@ export function ConsentBanner() {
             website; bạn có thể đổi ý bất kỳ lúc nào ở chân trang. Chi tiết:{" "}
             <Link href="/privacy" className="underline">Chính sách bảo mật</Link> ·{" "}
             <Link href="/cookies" className="underline">Chính sách cookie</Link>.
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            Lab: lựa chọn được gửi bằng <code className="font-mono">gtag(&apos;consent&apos;,&apos;update&apos;)</code> (Consent Mode v2).
           </p>
           {custom && (
             <div className="mt-3 flex flex-wrap gap-4 text-sm">

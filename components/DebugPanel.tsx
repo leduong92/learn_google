@@ -2,13 +2,21 @@
 
 import { useState, useSyncExternalStore } from "react";
 
-type Entry = { t: number; data: unknown };
-
+/**
+ * Đọc thẳng window.dataLayer (poll mỗi 500ms) — không can thiệp vào code của bạn.
+ * Trước Bài 1, window.dataLayer chưa tồn tại → panel báo "chưa có".
+ */
 function subscribe(cb: () => void) {
-  window.addEventListener("lab:dl", cb);
-  return () => window.removeEventListener("lab:dl", cb);
+  const t = window.setInterval(cb, 500);
+  return () => window.clearInterval(t);
 }
-const getVersion = () => window.__dlLog?.length ?? 0;
+const getVersion = () => (Array.isArray(window.dataLayer) ? window.dataLayer.length : -1);
+
+/** gtag() push vào dataLayer một object `arguments` → đổi sang dạng dễ đọc */
+function normalize(e: unknown): unknown {
+  if (Object.prototype.toString.call(e) === "[object Arguments]") return { gtag: Array.from(e as ArrayLike<unknown>) };
+  return e;
+}
 
 const ECOM = new Set([
   "view_item_list",
@@ -63,18 +71,21 @@ const KIND_STYLE: Record<string, string> = {
 };
 
 export function DebugPanel() {
-  const version = useSyncExternalStore(subscribe, getVersion, () => 0);
+  const version = useSyncExternalStore(subscribe, getVersion, () => -1);
   const [open, setOpen] = useState(false);
   const [hideNoise, setHideNoise] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
+  // "Xoá log" chỉ ẩn các mục cũ — KHÔNG xoá dataLayer thật (sẽ làm hỏng GTM)
+  const [offset, setOffset] = useState(0);
 
-  const log: Entry[] = version && typeof window !== "undefined" ? window.__dlLog : [];
+  const exists = version >= 0;
+  const log = exists ? window.dataLayer.slice(offset).map(normalize) : [];
   const rows = log
-    .map((e, i) => ({ ...e, i, ...labelOf(e.data), warnings: lint(e.data) }))
+    .map((data, j) => ({ data, i: offset + j, ...labelOf(data), warnings: lint(data) }))
     .filter((r) => !hideNoise || (r.kind !== "gtm" && r.kind !== "reset"))
     .reverse();
-  const t0 = log[0]?.t ?? 0;
-  const warnCount = log.reduce((s, e) => s + lint(e.data).length, 0);
+  const warnCount = log.reduce<number>((n, d) => n + lint(d).length, 0);
+  const count = exists ? version - offset : 0;
 
   return (
     <>
@@ -83,7 +94,7 @@ export function DebugPanel() {
         className="fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-full bg-lab px-4 py-2.5 font-mono text-xs font-semibold text-lab-ink shadow-lg hover:bg-black"
         aria-expanded={open}
       >
-        dataLayer <span className="rounded-full bg-[#9fd3a7] px-1.5 text-lab">{version}</span>
+        dataLayer <span className="rounded-full bg-[#9fd3a7] px-1.5 text-lab">{exists ? count : "—"}</span>
         {warnCount > 0 && <span className="rounded-full bg-[#f08a6b] px-1.5 text-lab">⚠ {warnCount}</span>}
       </button>
 
@@ -97,10 +108,7 @@ export function DebugPanel() {
             </label>
             <button
               className="rounded px-2 py-1 text-xs text-[#9aa3b2] hover:bg-white/10"
-              onClick={() => {
-                window.__dlLog.length = 0;
-                window.dispatchEvent(new CustomEvent("lab:dl"));
-              }}
+              onClick={() => setOffset(exists ? version : 0)}
             >
               Xoá log
             </button>
@@ -109,18 +117,23 @@ export function DebugPanel() {
             </button>
           </div>
           <p className="border-b border-white/10 px-4 py-2 text-[11px] leading-5 text-[#9aa3b2]">
-            Đây là những gì GTM nhận được. Mở thêm <b>GTM Preview (Tag Assistant)</b> để xem tag nào fire với từng event.
-            Log chỉ giữ trong trang hiện tại — điều hướng client-side vẫn giữ, reload sẽ mất.
+            Đây là nội dung <code>window.dataLayer</code> — thứ GTM “nghe”. Dùng song song với <b>GTM Preview (Tag Assistant)</b>.
+            Reload trang thì dataLayer bắt đầu lại từ đầu.
           </p>
           <ol className="flex-1 overflow-y-auto px-2 py-2">
-            {rows.length === 0 && <li className="px-2 py-6 text-center text-xs text-[#9aa3b2]">Chưa có event.</li>}
+            {!exists && (
+              <li className="px-2 py-6 text-center text-xs text-[#9aa3b2]">
+                <code>window.dataLayer</code> chưa tồn tại — hãy làm Bài 1 (nhúng GTM).
+              </li>
+            )}
+            {exists && rows.length === 0 && <li className="px-2 py-6 text-center text-xs text-[#9aa3b2]">Chưa có event.</li>}
             {rows.map((r) => (
               <li key={r.i} className="mb-1">
                 <button
                   className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
                   onClick={() => setExpanded(expanded === r.i ? null : r.i)}
                 >
-                  <span className="w-12 shrink-0 font-mono text-[10px] text-[#6f7787]">+{((r.t - t0) / 1000).toFixed(1)}s</span>
+                  <span className="w-8 shrink-0 font-mono text-[10px] text-[#6f7787]">#{r.i}</span>
                   <span className={`truncate rounded px-1.5 py-0.5 font-mono text-[11.5px] ${KIND_STYLE[r.kind]}`}>{r.name}</span>
                   {r.warnings.length > 0 && <span className="ml-auto text-xs text-[#f08a6b]">⚠ {r.warnings.length}</span>}
                 </button>

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { PRODUCTS, formatVND, type Product } from "@/lib/products";
 import { useTrackOnce } from "@/lib/hooks";
-import { toItem, trackEcommerce } from "@/lib/tracking";
 import { ProductImage } from "./ProductImage";
 
 export function ProductGrid({
@@ -15,13 +14,11 @@ export function ProductGrid({
   listName: string;
   products?: Product[];
 }) {
-  // view_item_list: khi danh sách sản phẩm hiển thị
+  // Chạy 1 lần khi danh sách hiển thị (đã chặn việc React dev chạy effect 2 lần)
   useTrackOnce(listId, () => {
-    trackEcommerce("view_item_list", {
-      item_list_id: listId,
-      item_list_name: listName,
-      items: products.map((p, index) => toItem(p, { index, listId, listName })),
-    });
+    // TODO Bài 4 — push event "view_item_list"
+    //   item_list_id = listId, item_list_name = listName, items = danh sách `products`
+    void listName;
   });
 
   return (
@@ -30,14 +27,10 @@ export function ProductGrid({
         <li key={p.id}>
           <Link
             href={`/products/${p.slug}`}
-            // select_item: người dùng click vào 1 sản phẩm trong danh sách
-            onClick={() =>
-              trackEcommerce("select_item", {
-                item_list_id: listId,
-                item_list_name: listName,
-                items: [toItem(p, { index, listId, listName })],
-              })
-            }
+            onClick={() => {
+              // TODO Bài 4 — push event "select_item" cho sản phẩm `p` (vị trí `index` trong danh sách)
+              void index;
+            }}
             className="group block"
           >
             <ProductImage product={p} className="aspect-[4/3] text-6xl transition-transform group-hover:scale-[1.02]" />
