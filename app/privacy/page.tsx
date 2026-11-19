@@ -25,7 +25,9 @@ export default function PrivacyPage() {
       </p>
       <p>
         Bên xử lý dữ liệu thay mặt chúng tôi: <b>Google</b> (Google LLC và các công ty liên kết, gồm Google Ireland Limited đối
-        với người dùng ở châu Âu) — cung cấp Google Tag Manager, Google Analytics 4 và Google Ads.
+        với người dùng ở châu Âu) — cung cấp Google Tag Manager, Google Analytics 4 và Google Ads; và <b>Vercel Inc.</b> (Hoa Kỳ) —
+        nhà cung cấp hosting, ghi nhật ký truy cập kỹ thuật (địa chỉ IP, trình duyệt, thời điểm truy cập) để vận hành và bảo vệ
+        website.
       </p>
 
       <h2>2. Dữ liệu nào được thu thập</h2>
@@ -67,6 +69,12 @@ export default function PrivacyPage() {
             <td>Đến khi bạn xoá (nút bên dưới hoặc xoá dữ liệu trình duyệt)</td>
           </tr>
           <tr>
+            <td>Vận hành &amp; bảo mật hosting (Vercel)</td>
+            <td>Địa chỉ IP, trình duyệt, URL truy cập</td>
+            <td>Cần thiết để cung cấp website, phòng chống tấn công</td>
+            <td>Theo thời hạn lưu log của Vercel (ngắn hạn)</td>
+          </tr>
+          <tr>
             <td>Thống kê lượt truy cập (Google Analytics 4)</td>
             <td>Mục 2b</td>
             <td>Sự đồng ý <code>analytics_storage</code></td>
@@ -99,7 +107,13 @@ export default function PrivacyPage() {
 
       <h2>4. Chuyển dữ liệu ra nước ngoài</h2>
       <p>
-        Dữ liệu ở mục 2b và 2c được Google xử lý trên hệ thống máy chủ đặt ngoài Việt Nam (bao gồm Hoa Kỳ). Khi đồng ý cookie
+        Dữ liệu ở mục 2b và 2c được Google xử lý trên hệ thống máy chủ đặt ngoài Việt Nam (bao gồm Hoa Kỳ). Nhật ký truy cập kỹ
+        thuật do Vercel lưu trên hạ tầng ngoài Việt Nam, chỉ dùng cho vận hành và bảo mật, và không dùng cho quảng cáo
+        (xem{" "}
+        <a className={ext} href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noreferrer">
+          chính sách của Vercel
+        </a>
+        ). Khi đồng ý cookie
         phân tích/quảng cáo, bạn được thông báo và đồng ý với việc chuyển này. Xem cách Google sử dụng dữ liệu:{" "}
         <a className={ext} href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noreferrer">
           policies.google.com/technologies/partner-sites
