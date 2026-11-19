@@ -22,19 +22,20 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: `${SITE.brand} (demo) — GTM & Google Ads Lab`,
-  description: "Website DEMO, không bán hàng: cửa hàng giả lập để học Google Tag Manager, GA4 ecommerce và Google Ads conversion tracking.",
+  description:
+    "Website DEMO, không bán hàng: cửa hàng giả lập để học Google Tag Manager, GA4 ecommerce và Google Ads conversion tracking.",
   // Cửa hàng giả không nên được index → tránh người dùng tưởng là shop thật
   robots: SITE.noindex ? { index: false, follow: false } : undefined,
 };
 
-const ENV_GTM_ID = process.env.NEXT_PUBLIC_GTM_ID ?? "";
+const ENV_GTM_ID = process.env.NEXT_GTM_ID ?? "";
 
 /**
  * Snippet chạy đồng bộ trong <head>, TRƯỚC mọi JS khác:
  *  1. Khởi tạo dataLayer + hàm gtag()
  *  2. "Bọc" dataLayer.push để Debug Panel thấy mọi event (GTM sẽ bọc tiếp lên trên, không ảnh hưởng)
  *  3. Consent Mode v2: mặc định denied, rồi update nếu người dùng đã chọn trước đó
- *  4. Chèn GTM container (ID lấy từ trang Cài đặt Lab, hoặc NEXT_PUBLIC_GTM_ID)
+ *  4. Chèn GTM container (ID lấy từ trang Cài đặt Lab, hoặc NEXT_GTM_ID)
  */
 const bootstrap = `
 (function(){
@@ -80,9 +81,15 @@ const bootstrap = `
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="vi" className={`${sans.variable} ${mono.variable} h-full antialiased`}>
+    <html
+      lang="vi"
+      className={`${sans.variable} ${mono.variable} h-full antialiased`}
+    >
       <head>
-        <script id="lab-gtm-bootstrap" dangerouslySetInnerHTML={{ __html: bootstrap }} />
+        <script
+          id="lab-gtm-bootstrap"
+          dangerouslySetInnerHTML={{ __html: bootstrap }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         {ENV_GTM_ID ? (

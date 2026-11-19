@@ -14,19 +14,19 @@ npm run dev
 Mở http://localhost:3000. Nhập GTM container ID ở **Cài đặt** (`/lab/settings`) hoặc đặt biến môi trường:
 
 ```bash
-NEXT_PUBLIC_GTM_ID=GTM-XXXXXXX npm run dev
+NEXT_GTM_ID=GTM-XXXXXXX npm run dev
 ```
 
 ## Có gì
 
-| Trang | Mục đích |
-| --- | --- |
-| `/` → `/products/[slug]` → `/cart` → `/checkout` → `/checkout/success` | Flow mua hàng, bắn đủ event GA4 ecommerce |
-| `/lab/ads` | Giả lập click Google Ads (gclid, UTM, auto-tagging), mô phỏng traffic hàng loạt |
-| `/lab/funnel` | Phễu chuyển đổi theo chiến dịch, CPA, ROAS, POAS, gợi ý tối ưu |
-| `/lab/guide` | Hướng dẫn từng bước cấu hình GTM → GA4 → Google Ads (tiếng Việt) |
-| `/lab/settings` | GTM ID, bật “lỗi tracking” để luyện debug, xoá dữ liệu |
-| Nút `dataLayer` góc phải | Xem mọi event realtime, cảnh báo lỗi dữ liệu ecommerce |
+| Trang                                                                  | Mục đích                                                                        |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `/` → `/products/[slug]` → `/cart` → `/checkout` → `/checkout/success` | Flow mua hàng, bắn đủ event GA4 ecommerce                                       |
+| `/lab/ads`                                                             | Giả lập click Google Ads (gclid, UTM, auto-tagging), mô phỏng traffic hàng loạt |
+| `/lab/funnel`                                                          | Phễu chuyển đổi theo chiến dịch, CPA, ROAS, POAS, gợi ý tối ưu                  |
+| `/lab/guide`                                                           | Hướng dẫn từng bước cấu hình GTM → GA4 → Google Ads (tiếng Việt)                |
+| `/lab/settings`                                                        | GTM ID, bật “lỗi tracking” để luyện debug, xoá dữ liệu                          |
+| Nút `dataLayer` góc phải                                               | Xem mọi event realtime, cảnh báo lỗi dữ liệu ecommerce                          |
 
 ## Trước khi publish lên tên miền thật
 
