@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Nhà Mộc — GTM & Google Ads Lab
 
-## Getting Started
+Cửa hàng nội thất **giả lập** để học Google Tag Manager, GA4 ecommerce và Google Ads conversion tracking.
+Đi trọn hành trình: click quảng cáo (gclid/UTM) → xem sản phẩm → giỏ hàng → checkout → purchase,
+và quan sát từng `dataLayer.push`.
 
-First, run the development server:
+## Chạy
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Mở http://localhost:3000. Nhập GTM container ID ở **Cài đặt** (`/lab/settings`) hoặc đặt biến môi trường:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+NEXT_PUBLIC_GTM_ID=GTM-XXXXXXX npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Có gì
 
-## Learn More
+| Trang | Mục đích |
+| --- | --- |
+| `/` → `/products/[slug]` → `/cart` → `/checkout` → `/checkout/success` | Flow mua hàng, bắn đủ event GA4 ecommerce |
+| `/lab/ads` | Giả lập click Google Ads (gclid, UTM, auto-tagging), mô phỏng traffic hàng loạt |
+| `/lab/funnel` | Phễu chuyển đổi theo chiến dịch, CPA, ROAS, POAS, gợi ý tối ưu |
+| `/lab/guide` | Hướng dẫn từng bước cấu hình GTM → GA4 → Google Ads (tiếng Việt) |
+| `/lab/settings` | GTM ID, bật “lỗi tracking” để luyện debug, xoá dữ liệu |
+| Nút `dataLayer` góc phải | Xem mọi event realtime, cảnh báo lỗi dữ liệu ecommerce |
 
-To learn more about Next.js, take a look at the following resources:
+## Trước khi publish lên tên miền thật
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Điền `operatorName`, `contactEmail`, `domain` trong `lib/site-config.ts` (các trang `/privacy`, `/cookies`, `/terms` báo đỏ nếu còn thiếu).
+2. Giữ `noindex: true` — cửa hàng giả không nên xuất hiện trên Google Search.
+3. Thêm tag mới trong GTM → cập nhật bảng cookie ở `app/cookies/page.tsx` và gắn consent cho tag.
+4. Không chạy quảng cáo Google Ads thật có lời chào bán/giá/khuyến mại trỏ về site demo (rủi ro vi phạm chính sách Misrepresentation).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Code tracking ở đâu
 
-## Deploy on Vercel
+- `app/layout.tsx` — snippet GTM, khởi tạo `dataLayer`, Consent Mode v2 mặc định
+- `instrumentation-client.ts` — bắt gclid/UTM khi landing, đếm phiên, `virtual_page_view`
+- `lib/tracking.ts` — `trackEcommerce()`, chuẩn hoá item GA4, enhanced conversions (SHA-256)
+- `lib/campaigns.ts` — chiến dịch giả lập (CPC, tỉ lệ chuyển đổi)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Toàn bộ dữ liệu lab (giỏ hàng, số liệu phễu, attribution) chỉ nằm trong localStorage của trình duyệt.
+gclid là giả nên Google Ads sẽ không gán chuyển đổi — lab dùng để học cơ chế, cấu hình và debug.
