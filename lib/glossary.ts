@@ -263,9 +263,10 @@ export const GLOSSARY: GlossarySection[] = [
       },
       { t: "Currency Code", w: "Google Ads Conversion Tracking", d: "Mã tiền tệ của Conversion Value.", ex: "`VND`" },
       {
-        t: "Include user-provided data from your website",
-        w: "Google Ads Conversion Tracking",
-        d: "Bật Enhanced Conversions: gửi kèm email/SĐT (được mã hoá) qua một biến User-Provided Data.",
+        t: "user_data (Event Parameter)",
+        w: "Google Ads Conversion Tracking → Event Parameters",
+        d: "Cách gửi Enhanced Conversions trong GTM bản mới: Add parameter `user_data` = một biến loại User-Provided Data. (GTM bản cũ dùng ô tick “Include user-provided data from your website”.)",
+        ex: "`user_data` = `{{UPD - user_data}}`",
       },
       {
         t: "Conversion Linker",

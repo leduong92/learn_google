@@ -4,7 +4,7 @@ export const metadata = { title: "Bài học GTM & Google Ads — từ đầu" }
 
 /* ---------------- Code mẫu cho từng bài ---------------- */
 
-const B1_ENV = `NEXT_GTM_ID=GTM-KLQVQN67`;
+const B1_ENV = `NEXT_GTM_ID=GTM-XXXXXXX   # thay bằng ID container của bạn`;
 
 const B1_LAYOUT = `// app/layout.tsx — đặt ngay dưới các dòng import
 const GTM_ID = process.env.NEXT_GTM_ID;
@@ -228,23 +228,46 @@ gtag('js', new Date());`;
 
 const B7_BANNER = `// components/ConsentBanner.tsx — trong hàm apply(), chỗ "TODO Bài 7"
 window.gtag?.("consent", "update", state);
-window.dataLayer.push({ event: "consent_update" });`;
+window.dataLayer?.push({ event: "consent_update" }); // ?. — không lỗi khi chưa nhúng GTM`;
 
-const B8_USERDATA = `// lib/datalayer.ts — trong trackPurchase(), chỗ "TODO Bài 8"
-// Nhớ import: consentStore (từ "@/lib/lab-state")
-const allowed =
-  order.ec_consent && consentStore.get().state.ad_user_data === "granted";
+const B8_USERDATA = `// lib/datalayer.ts — viết lại trackPurchase() của Bài 5: GỘP user_data vào CÙNG MỘT lần push
+// Nhớ import: consentStore (từ "./lab-state")
+export function trackPurchase(order: OrderDto) {
+  const tracked = readTracked();
+  if (tracked.includes(order.transaction_id)) return; // ✅ chống trùng — luôn đặt TRƯỚC mọi lần push
 
-window.dataLayer.push({
-  event: "purchase",
-  ecommerce: { /* như Bài 5 */ },
-  ...(allowed && {
-    user_data: {
-      email: order.customer.email.trim().toLowerCase(),
-      phone_number: "+84" + order.customer.phone.replace(/\\D/g, "").replace(/^0/, ""),
+  const allowed =
+    order.ec_consent && consentStore.get().state.ad_user_data === "granted";
+
+  window.dataLayer = window.dataLayer || [];
+  // Reset cả ecommerce lẫn user_data: dataLayer GỘP dữ liệu giữa các lần push,
+  // không reset thì email của đơn trước còn "dính" sang đơn sau (kể cả khi đơn sau không đồng ý)
+  window.dataLayer.push({ ecommerce: null, user_data: null });
+  window.dataLayer.push({
+    event: "purchase",
+    ecommerce: {
+      currency: "VND",
+      transaction_id: order.transaction_id,
+      value: order.value,
+      shipping: order.shipping,
+      coupon: order.coupon || undefined,
+      customer_type: order.new_customer ? "new" : "returning",
+      items: order.items.flatMap((it) => {
+        const p = getProductById(it.productId);
+        return p ? [toItem(p, it.quantity, it.variant)] : [];
+      }),
     },
-  }),
-});`;
+    // Chỉ thêm user_data khi được phép — không được phép thì KHÔNG có khoá này
+    ...(allowed && {
+      user_data: {
+        email: order.customer.email.trim().toLowerCase(),
+        phone_number: "+84" + order.customer.phone.replace(/\\D/g, "").replace(/^0/, ""),
+      },
+    }),
+  });
+
+  localStorage.setItem(TRACKED_KEY, JSON.stringify([...tracked, order.transaction_id].slice(-50)));
+}`;
 
 /* ---------------- Danh sách bài ---------------- */
 
@@ -380,9 +403,14 @@ export default function GuidePage() {
           </li>
           <li>Nút <b>dataLayer</b> ở góc phải màn hình cho bạn thấy mọi thứ bạn push, kèm cảnh báo ⚠ nếu dữ liệu sai.</li>
           <li>
-            Bí quá thì xem <b>đáp án</b> ở nhánh <code>dev</code> (bản làm sẵn), ví dụ:{" "}
-            <code>git show dev:app/products/[slug]/ProductDetail.tsx</code>. Bản đáp án dùng hàm <code>trackEcommerce</code> trong{" "}
-            <code>lib/tracking.ts</code> của nhánh đó.
+            Bí quá thì xem <b>đáp án</b>: code mẫu ngay trong từng bài; bản làm sẵn ở nhánh <code>dev</code> (cấu trúc cũ: dùng{" "}
+            <code>trackEcommerce</code> trong <code>lib/tracking.ts</code> và trang <code>/checkout/success</code>), ví dụ{" "}
+            <code>git show dev:app/products/[slug]/ProductDetail.tsx</code>. Làm xong một lượt thì commit lại — nhánh đó thành đáp án
+            của chính bạn khi luyện lại.
+          </li>
+          <li>
+            Gặp menu, trường lạ trong GTM / GA4 / Google Ads → tra <Link href="/lab/glossary" className="text-accent underline">📖 Từ
+            điển</Link>. Giao diện Google đổi thường xuyên; thấy khác hướng dẫn thì tìm theo tên trường.
           </li>
           <li>Học trên <code>localhost</code> trước. Chỉ đưa lên tên miền thật sau Bài 7.</li>
         </ul>
@@ -411,6 +439,11 @@ export default function GuidePage() {
           Vì sao script (1) đứng trước (2)? <code>gtm.js</code> tải bất đồng bộ (<code>async</code>); đặt phần tạo dataLayer lên trước
           để chắc chắn nó luôn có sẵn khi GTM chạy. Vì sao không dán nguyên văn? JSX không cho viết nội dung bên trong thẻ{" "}
           <code>&lt;script&gt;</code> như HTML, phải dùng <code>dangerouslySetInnerHTML</code>.
+        </p>
+        <p className="text-sm text-muted">
+          Console báo <i>“Encountered a script tag while rendering React component”</i> ngay sau khi bạn sửa <code>layout.tsx</code>? Đó
+          là cảnh báo của chế độ dev khi trang tự tải lại (hot reload) — GTM vẫn chạy. Mở tab mới thì hết. (Cách khác của Next.js:{" "}
+          <code>next/script</code> với <code>strategy=&quot;beforeInteractive&quot;</code>.)
         </p>
         <h3>Trong GTM — bật Preview (Tag Assistant)</h3>
         <p>Chưa cần tạo tag nào. Giữ <code>npm run dev</code> đang chạy, rồi:</p>
@@ -520,6 +553,14 @@ export default function GuidePage() {
           Đặt tên theo quy ước <code>Loại - Chi tiết</code> ngay từ đầu: tag <code>GA4 - …</code>, trigger <code>CE - …</code> (Custom
           Event), biến <code>DLV - …</code> (Data Layer Variable). Container sau này có hàng chục tag, tên rõ ràng giúp tìm nhanh.
         </p>
+
+        <Warn title="GA4 có thể tự thêm tag vào GTM của bạn">
+          <p>
+            Khi đi qua màn hình cài đặt của GA4, Google có thể tự tạo tag <code>Google Analytics G-…</code> (loại “Google Analytics”,
+            trigger Initialization) trong container của bạn. Nó trùng việc với <code>GA4 - Google Tag</code> → vào Tags, tick tag đó →
+            🗑 Delete. Container chỉ nên có <b>một</b> Google tag cho mỗi ID.
+          </p>
+        </Warn>
 
         <h3>3. Đọc Tag Assistant cho đúng</h3>
         <ul>
@@ -1232,13 +1273,19 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
             Menu trái <b>Goals (Mục tiêu)</b> → <b>Conversions</b> → <b>Summary</b> → <b>+ Create conversion action</b>.
           </li>
           <li>
-            Chọn <b>Website</b> → nhập tên miền của bạn → <b>Scan</b>.
+            Chọn <b>Website</b> → màn hình <b>Measure conversions on your website</b>: nhập tên miền (Google không quét được{" "}
+            <code>localhost</code>).
           </li>
           <li>
-            Kéo xuống “Create conversion actions manually using code” → <b>+ Add a conversion action manually</b>.
+            Mục <b>Choose data sources</b>: tick <b>Google tag</b> (Google tạo Google tag của tài khoản Ads, ID dạng{" "}
+            <code>GTM-…</code> + <code>AW-…</code>). <b>Chưa bấm Link</b> property GA4 — tránh mỗi đơn bị tính 2 lần. Hiện “Not installed
+            yet” hay lỗi “Something went wrong” → đóng thông báo, bấm <b>Done</b> vẫn đi tiếp được.
           </li>
-          <li>
-            Điền (ý nghĩa từng ô: <Link href="/lab/glossary#ads" className="text-accent underline">Từ điển → Google Ads</Link>):
+          <li>Tạo conversion action <b>thủ công</b> (manually) và điền:</li>
+          <li style={{ listStyle: "none" }}>
+            <p className="text-sm text-muted">
+              Ý nghĩa từng ô: <Link href="/lab/glossary#ads" className="text-accent underline">Từ điển → Google Ads</Link>.
+            </p>
             <table>
               <thead>
                 <tr>
@@ -1262,8 +1309,9 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
             </table>
           </li>
           <li>
-            <b>Done</b> → <b>Save and continue</b> → màn hình cài tag chọn <b>Use Google Tag Manager</b> → ghi lại{" "}
-            <b>Conversion ID</b> (dãy số) và <b>Conversion Label</b> (chuỗi).
+            Màn hình <b>“You are almost done!”</b> → tab <b>Use Google Tag Manager</b> → ghi lại <b>Conversion ID</b> (dãy số) và{" "}
+            <b>Conversion Label</b> (chuỗi). <b>Đừng bấm</b> “Set up in Google Tag Manager” (để Google tạo hộ) — mình tự làm để hiểu.
+            Kéo xuống → <b>Done</b>.
           </li>
         </ol>
         <Warn title="Tài khoản đang chạy quảng cáo thật?">
@@ -1281,6 +1329,10 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
           <li>Tags → <b>New</b> → tên <code>Conversion Linker</code> → loại <b>Conversion Linker</b> (để mặc định).</li>
           <li>Triggering → <b>All Pages</b> (hoặc Initialization - All Pages) → Save.</li>
         </ol>
+        <p className="text-sm text-muted">
+          GTM gắn nhãn <b>LEGACY</b> cho loại tag này vì Google tag (<code>AW-…</code>) giờ tự lưu gclid. Vẫn nên tạo trong bài để thấy
+          cơ chế — không gây đếm trùng.
+        </p>
 
         <h3>Bước 3 — Trigger riêng cho purchase</h3>
         <p>
@@ -1323,12 +1375,19 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
           </li>
           <li>Triggering → <b>chỉ</b> <code>CE - purchase</code> → Save.</li>
           <li>
-            Nếu GTM báo kiểu <b>“Google tag not found”</b> cho <code>AW-…</code>: bấm theo gợi ý để tạo <b>Google Tag</b> với Tag ID{" "}
-            <code>AW-&lt;Conversion ID&gt;</code>, trigger <b>Initialization - All Pages</b> — cần cho chuyển đổi và Enhanced
-            Conversions (Bài 8) hoạt động đầy đủ.
+            Cần một <b>Google Tag</b> cho Ads: Tag ID <code>AW-&lt;Conversion ID&gt;</code>, trigger <b>Initialization - All Pages</b>,
+            tên <code>Google Tag - Ads</code>. Xem danh sách Tags trước: Google Ads thường <b>đã tự tạo</b> tag{" "}
+            <code>Google Ads AW-…</code> khi bạn tick “Google tag” ở Bước 1 → giữ <b>một</b> cái (đổi tên cho dễ nhận), đừng tạo thêm.
           </li>
           <li>Bấm <b>Preview</b>.</li>
         </ol>
+
+        <Warn title="Thấy hit “User provided data” trong Tag Assistant?">
+          <p>
+            Google tag đang tự dò email/SĐT trong form checkout và gửi đi dù người dùng chưa đồng ý. Tắt “Automatically detect
+            user-provided data” ngay — cách làm ở <a href="#bai-8" className="text-accent underline">Bài 8, mục 3</a>.
+          </p>
+        </Warn>
 
         <h3>Bước 5 — Thử như khách đến từ quảng cáo</h3>
         <ol>
@@ -1400,47 +1459,124 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
         <Code>{B7_CONSENT}</Code>
         <h3>2. Khi người dùng bấm banner — components/ConsentBanner.tsx</h3>
         <Code>{B7_BANNER}</Code>
+        <p className="text-sm text-muted">
+          Banner, checkbox và nơi lưu lựa chọn (<code>lab_consent_ui</code> trong localStorage) đã làm sẵn — bạn chỉ báo lựa chọn cho
+          Google. 4 loại consent: <code>analytics_storage</code> (cookie GA4), <code>ad_storage</code> (cookie quảng cáo),{" "}
+          <code>ad_user_data</code> (gửi dữ liệu người dùng cho Google Ads — Bài 8), <code>ad_personalization</code> (remarketing).
+        </p>
         <h3>Trong GTM</h3>
         <p>
           Admin → Container Settings → tick <b>Enable consent overview</b>. Các tag Google tự tuân theo consent; tag ngoài Google
           (Facebook, TikTok…) phải đặt “Require additional consent”.
         </p>
+        <p className="text-sm text-muted">
+          Cách trên là <b>Advanced consent mode</b>: khi bị từ chối, tag Google vẫn chạy nhưng <b>không ghi cookie</b>, chỉ gửi tín hiệu
+          ẩn danh (tham số <code>gcs=G100</code> trong hit; đồng ý hết thì <code>G111</code>). Muốn chặt hơn (<b>Basic</b>): không cho tag
+          Google nào chạy trước khi đồng ý — dùng trigger <code>consent_update</code> hoặc “Require additional consent”.
+        </p>
         <Check
           items={[
             "Cửa sổ ẩn danh → bấm “Từ chối tất cả” → DevTools → Cookies: KHÔNG có _ga, _gcl_*.",
             "Bấm “Cài đặt cookie” ở chân trang → “Chấp nhận tất cả” → có cookie _ga.",
-            "Tag Assistant → tab Consent thấy Default = denied, Update = granted.",
+            "Tag Assistant → tab Consent: On-page Default = Denied; sau khi chấp nhận, On-page Update = Granted.",
+            "Hits Sent khi đang từ chối: hit vẫn có nhưng tham số gcs=G100 (không cookie).",
           ]}
         />
       </Lesson>
 
       <Lesson id="bai-8">
         <p>
-          Enhanced Conversions gửi email/SĐT (Google tự mã hoá SHA-256) để đối chiếu chuyển đổi chính xác hơn. Chỉ được gửi khi người
-          dùng <b>tích ô đồng ý riêng</b> ở checkout <b>và</b> đã cho phép <code>ad_user_data</code>.
+          Enhanced Conversions gửi kèm email/SĐT của người mua (Google tự mã hoá SHA-256) để Google Ads đối chiếu chuyển đổi chính xác
+          hơn khi cookie bị chặn. Chỉ được gửi khi người dùng <b>tích ô đồng ý riêng</b> ở checkout <b>và</b> đã cho phép{" "}
+          <code>ad_user_data</code> ở banner cookie — nên phải làm <a href="#bai-7" className="text-accent underline">Bài 7</a> trước.
+        </p>
+
+        <h3>1. Code — chỉ thêm user_data khi được phép</h3>
+        <p>
+          <b>Thay cả hàm</b> <code>trackPurchase</code> của Bài 5 bằng bản dưới — đừng dán thêm một lần push nữa, nếu không mỗi đơn sẽ
+          có 2 event <code>purchase</code> (một cái rỗng, không có <code>transaction_id</code>).
         </p>
         <Code>{B8_USERDATA}</Code>
+        <p className="text-sm text-muted">
+          Chuẩn hoá trước khi gửi: email viết thường, bỏ khoảng trắng (email mẫu cố ý là <code>Nguyen.An@Example.com </code>); SĐT dạng
+          quốc tế <code>+84…</code>. Tên trường chuẩn: <Link href="/lab/glossary#user-data" className="text-accent underline">Từ điển → user_data</Link>.
+        </p>
+
+        <h3>2. Google Ads — bật Enhanced conversions (giao diện 2026)</h3>
         <ol>
-          <li>Google Ads → Goals → Settings → bật <b>Enhanced conversions for web</b> → phương thức Google Tag Manager.</li>
           <li>
-            Trong tag Ads Conversion (Bài 6): tick <b>Include user-provided data</b> → New Variable → <b>User-Provided Data</b> → Manual
-            → Email = Data Layer Variable <code>user_data.email</code>, Phone = <code>user_data.phone_number</code>.
+            Menu trái <b>Goals</b> → <b>Settings</b>. Không thấy mục Settings? Mở thẳng{" "}
+            <code className="break-all">ads.google.com/aw/conversions/customersettings</code> (đang đăng nhập đúng tài khoản Ads).
           </li>
+          <li>
+            Mở khung <b>Customer data use</b> → tick <b>Turn on enhanced conversions</b>. <b>Không</b> cần tick “Turn on
+            conversion-based customer lists”.
+          </li>
+          <li>
+            <b>Agree and save</b> → đọc điều khoản xử lý dữ liệu (Google Ads Data Processing Terms) → <b>Agree and continue</b>.
+          </li>
+        </ol>
+        <p className="text-sm text-muted">
+          Từ giữa 2026 Google gộp Enhanced conversions for web và for leads thành <b>một công tắc bật/tắt</b>, không còn bước chọn
+          phương thức (Google tag / Google Tag Manager / API). Tài khoản nào vẫn hiện ô chọn phương thức thì chọn{" "}
+          <b>Google Tag Manager</b>. Giao diện còn có thể đổi — tra “Set up enhanced conversions for web using Google Tag Manager” trên
+          Google Ads Help.
+        </p>
+
+        <h3>3. Google tag — cho phép nhận dữ liệu, nhưng KHÔNG tự dò form</h3>
+        <ol>
+          <li>
+            Mở cài đặt Google tag của Ads: Tag Assistant → mục <b>Tag Settings</b> → <b>Allow user-provided data capabilities</b>; hoặc
+            Google Ads → <b>Tools</b> → <b>Data manager</b> → <b>Google tag</b> → <b>Manage</b>.
+          </li>
+          <li>
+            Bật <b>Allow user-provided data capabilities</b>, nhưng <b>tắt</b> “Automatically detect user-provided data” — nếu không, Google
+            tag tự quét form checkout và gửi email/SĐT dù người dùng chưa tích ô đồng ý.
+          </li>
+        </ol>
+
+        <h3>4. GTM — gắn user_data vào tag Ads Conversion (Bài 6)</h3>
+        <ol>
+          <li>
+            Tạo biến <code>DLV - user_data</code>: Data Layer Variable, tên <code>user_data</code>, Version 2.
+          </li>
+          <li>
+            Tạo biến <code>UPD - user_data</code>: Variables → New → loại <b>User-Provided Data</b> → chọn <b>Code</b> → Data source:{" "}
+            <code>{"{{DLV - user_data}}"}</code> (object có sẵn <code>email</code>, <code>phone_number</code>). Cách khác:{" "}
+            <b>Manual configuration</b> → Email = <code>{"{{DLV - user_data.email}}"}</code>, Phone ={" "}
+            <code>{"{{DLV - user_data.phone_number}}"}</code>.
+          </li>
+          <li>
+            Mở tag <code>Ads - Conversion - Purchase</code> → mục <b>Event Parameters</b> → <b>Add parameter</b> → Event Parameter:{" "}
+            <code>user_data</code>, Value: <code>{"{{UPD - user_data}}"}</code>. (GTM bản cũ có ô tick “Include user-provided data from
+            your website” — bản mới đã bỏ, thay bằng tham số này.)
+          </li>
+          <li>Save tag → Preview.</li>
         </ol>
         <Check
           items={[
-            "Đặt hàng KHÔNG tích ô Enhanced Conversions → purchase không có user_data.",
-            "Tích ô + đã chấp nhận cookie → có user_data.",
+            "Đặt hàng KHÔNG tích ô Enhanced Conversions → dataLayer purchase không có user_data.",
+            "Tích ô + đã “Chấp nhận tất cả” cookie → purchase có user_data (email viết thường, SĐT +84…).",
+            "Tag Assistant, mốc purchase → tab Variables: UPD - user_data có email/SĐT; bấm hit Google Ads thấy dữ liệu người dùng đã được mã hoá (không phải email thô).",
+            "Không có hit “User provided data” nào trước khi người dùng đồng ý.",
           ]}
         />
       </Lesson>
 
       <Lesson id="bai-9">
         <ol>
+          <li>
+            Dọn container: mỗi ID chỉ một Google tag (xoá tag Google tự tạo bị trùng), tag Ads Conversion chỉ chạy ở{" "}
+            <code>CE - purchase</code>, đã tắt tự dò user-provided data. <b>Admin → Export Container</b> để sao lưu.
+          </li>
           <li>GTM → <b>Submit</b> → đặt tên version (vd. “v1 – GA4 ecommerce + Ads purchase”) → <b>Publish</b>. Chưa Publish thì tag chỉ chạy trong Preview.</li>
           <li>Điền thông tin người vận hành trong <code>lib/site-config.ts</code> (các trang chính sách báo đỏ nếu thiếu).</li>
           <li>Vercel → Settings → Environment Variables: <code>NEXT_GTM_ID</code> = ID container → Redeploy.</li>
-          <li>Trên tên miền thật: Preview GTM với URL mới, kiểm tra lại cả Bài 7.</li>
+          <li>Trên tên miền thật: Preview GTM với URL mới, kiểm tra lại cả Bài 7 (cửa sổ ẩn danh, từ chối → không có cookie _ga).</li>
+          <li>
+            GA4 → Admin → <b>Data filters</b> → bật filter <b>Developer traffic</b> (Active) để dữ liệu khi Preview/tập luyện không lẫn vào
+            báo cáo; hoặc dùng property GA4 riêng cho localhost (Lookup Table theo <code>{"{{Page Hostname}}"}</code>, Bài 3.5).
+          </li>
           <li>
             Mỗi khi thêm tag mới, cập nhật bảng trong <Link href="/cookies" className="text-accent underline">Chính sách cookie</Link>.
           </li>

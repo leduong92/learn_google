@@ -48,7 +48,7 @@ export default function CheckoutPage() {
   const hydrated = useHydrated();
   const cart = cartStore.useStore();
   const [step, setStep] = useState<"info" | "payment">("info");
-  const [customer, setCustomer] = useState<Customer>(EMPTY);
+  const [customer, setCustomer] = useState<Customer>(SAMPLE); // điền sẵn dữ liệu mẫu cho nhanh
   const [shippingId, setShippingId] = useState<string>(SHIPPING_OPTIONS[0].id);
   const [paymentId, setPaymentId] = useState<string>(PAYMENT_OPTIONS[0].id);
   const [placing, setPlacing] = useState(false);
@@ -202,14 +202,14 @@ export default function CheckoutPage() {
               <button
                 type="button"
                 className="text-sm text-accent underline underline-offset-2"
-                onClick={() => setCustomer(SAMPLE)}
+                onClick={() => setCustomer(EMPTY)}
               >
-                Điền dữ liệu mẫu
+                Xoá trắng form
               </button>
             </div>
             <p className="-mt-3 rounded-lg bg-[#f6ecd6] px-3 py-2 text-sm text-[#5c4410]">
-              <b>Đừng nhập thông tin thật</b> — bấm “Điền dữ liệu mẫu”. Đây là
-              demo, không có giao hàng hay thanh toán.
+              Đã điền sẵn <b>dữ liệu mẫu</b> — cứ bấm tiếp. <b>Đừng nhập thông tin thật</b>: đây là demo, không có
+              giao hàng hay thanh toán.
             </p>
             <div className="grid gap-4 sm:grid-cols-2">
               {field("email", "Email", {
