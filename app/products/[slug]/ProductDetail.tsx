@@ -6,7 +6,7 @@ import { formatVND, type Product } from "@/lib/products";
 import { cartStore } from "@/lib/lab-state";
 import { useTrackOnce } from "@/lib/hooks";
 import { ProductImage } from "@/components/ProductImage";
-import { pushEcommerce, toItem } from "@/lib/dataLayer";
+import { pushEcommerce, toItem } from "@/lib/datalayer";
 
 export function ProductDetail({ product: p }: { product: Product }) {
   const [variant, setVariant] = useState(p.variants[0]);

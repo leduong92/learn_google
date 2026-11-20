@@ -258,7 +258,7 @@ export const GLOSSARY: GlossarySection[] = [
       {
         t: "Transaction ID",
         w: "Google Ads Conversion Tracking",
-        d: "Mã đơn hàng. Google Ads bỏ các chuyển đổi trùng mã — chống đếm 2 lần khi khách reload trang cảm ơn.",
+        d: "Mã đơn hàng. Google Ads bỏ các chuyển đổi trùng mã — chống đếm 2 lần khi khách reload trang trạng thái/cảm ơn.",
         ex: "`{{DLV - ecommerce.transaction_id}}`",
       },
       { t: "Currency Code", w: "Google Ads Conversion Tracking", d: "Mã tiền tệ của Conversion Value.", ex: "`VND`" },
@@ -534,7 +534,7 @@ export const GLOSSARY: GlossarySection[] = [
         t: "purchase",
         w: "Mua thành công",
         d: "`transaction_id`✱, `items`✱, `currency`, `value`, `coupon`, `shipping`, `tax`, `customer_type`. Event quan trọng nhất — Google Ads tối ưu dựa vào nó.",
-        ex: "Trang cảm ơn `app/checkout/success/page.tsx` (Bài 5)",
+        ex: "Trang trạng thái thanh toán `app/checkout/status/[order]` khi API báo Paid — `trackPurchase` trong `lib/datalayer.ts` (Bài 5)",
       },
       {
         t: "refund",

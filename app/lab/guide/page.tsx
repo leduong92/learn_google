@@ -140,21 +140,70 @@ const WALK: [string, string][] = [
   ["Bấm + rồi −", "add_to_cart → remove_from_cart"],
   ["Bấm Thanh toán", "begin_checkout"],
   ["Điền thông tin → Tiếp tục", "add_shipping_info"],
-  ["Bấm Đặt hàng", "add_payment_info (rồi chuyển sang trang cảm ơn — purchase là Bài 5)"],
+  ["Bấm Đặt hàng", "add_payment_info (rồi chuyển sang trang trạng thái thanh toán — purchase là Bài 5)"],
 ];
 
-const B5_PURCHASE = `// app/checkout/success/page.tsx — chỗ "TODO Bài 5"
-// Nhớ import: saveLastOrder (từ "@/lib/lab-state"), pushEcommerce + toItem (từ "@/lib/datalayer")
-if (order.tracked) return; // ✅ đã gửi rồi → reload trang không gửi lại
+const B5_FLOW = `Bấm "Đặt hàng"
+  → backend tạo đơn, trạng thái Pending          (lib/order-api.ts → createOrder)
+  → cổng thanh toán xử lý ~5 giây                (giả lập Stripe)
+  → redirect về /checkout/status/NM-XXXX
+  → trang status gọi API mỗi 3 giây (tối đa 30s)  (orderApi.getTracking)
+       ├─ Paid    → xoá giỏ + trackPurchase(res.data)   ← purchase gửi Ở ĐÂY
+       ├─ Failed  → báo lỗi, giữ giỏ, KHÔNG gửi purchase
+       └─ hết 30s → "chưa xác nhận được", KHÔNG gửi purchase`;
 
-pushEcommerce("purchase", {
-  transaction_id: order.transaction_id,
-  value: order.value,
-  shipping: order.shipping,
-  coupon: order.coupon || undefined,
-  items: /* tự viết: đổi order.items thành mảng item (gợi ý: getProductById + toItem) */ [],
-});
-saveLastOrder({ ...order, tracked: true });`;
+const B5_TRACK = `// lib/datalayer.ts — thêm import ở đầu file:
+// import { getProductById, type Product } from "./products";
+// import type { OrderDto } from "./order-api";
+
+const TRACKED_KEY = "lab_tracked_purchases";
+
+function readTracked(): string[] {
+  try { return JSON.parse(localStorage.getItem(TRACKED_KEY) || "[]"); }
+  catch { return []; }
+}
+
+/** Gửi purchase ĐÚNG 1 LẦN cho mỗi mã đơn */
+export function trackPurchase(order: OrderDto) {
+  const tracked = readTracked();
+  if (tracked.includes(order.transaction_id)) return; // ✅ đã gửi → không gửi lại
+
+  pushEcommerce("purchase", {
+    transaction_id: order.transaction_id,
+    value: order.value,              // đã trừ giảm giá, KHÔNG gồm ship
+    shipping: order.shipping,
+    coupon: order.coupon || undefined,
+    customer_type: order.new_customer ? "new" : "returning",
+    items: order.items.flatMap((it) => {
+      const p = getProductById(it.productId);
+      return p ? [toItem(p, it.quantity, it.variant)] : [];
+    }),
+  });
+
+  localStorage.setItem(TRACKED_KEY, JSON.stringify([...tracked, order.transaction_id].slice(-50)));
+}`;
+
+const B5_STATUS = `// app/checkout/status/[order]/component/PaymentStatusClient.tsx — trong hàm poll()
+const res = await orderApi.getTracking(order);
+if (!isMounted) return;
+
+if (res.isSuccess) {
+  const status = res.data.orderStatusLabel.toLowerCase();
+  if (status === "authorized" || status === "paid") {
+    cartStore.set({ lines: [], coupon: "" }); // thanh toán xong mới xoá giỏ
+    setOrderData(res.data);
+    setFinalStatus("authorized");
+    trackPurchase(res.data);   // ✅ res.data — KHÔNG phải orderData
+    return;
+  }
+}`;
+
+const B5_BUG = `// ❌ LỖI HAY GẶP — gửi purchase với dữ liệu undefined
+setOrderData(res.data);
+trackEvent("purchase", {
+  transaction_id: orderData?.id,        // orderData = state lúc effect bắt đầu = undefined
+  value: orderData?.totalAmount,        // undefined
+});`;
 
 const B7_CONSENT = `// app/layout.tsx — sửa đoạn script (1) của Bài 1 thành:
 window.dataLayer = window.dataLayer || [];
@@ -181,7 +230,7 @@ const B7_BANNER = `// components/ConsentBanner.tsx — trong hàm apply(), chỗ
 window.gtag?.("consent", "update", state);
 window.dataLayer.push({ event: "consent_update" });`;
 
-const B8_USERDATA = `// app/checkout/success/page.tsx — thêm vào object purchase, chỗ "TODO Bài 8"
+const B8_USERDATA = `// lib/datalayer.ts — trong trackPurchase(), chỗ "TODO Bài 8"
 // Nhớ import: consentStore (từ "@/lib/lab-state")
 const allowed =
   order.ec_consent && consentStore.get().state.ad_user_data === "granted";
@@ -1039,48 +1088,307 @@ export default function GuidePage() {
 
       <Lesson id="bai-5">
         <p>
-          <code>purchase</code> là event quan trọng nhất — Google Ads tối ưu dựa vào nó. Nó phải có <code>transaction_id</code> và chỉ
-          gửi <b>1 lần</b> cho mỗi đơn (người dùng hay reload trang cảm ơn).
+          <code>purchase</code> là event quan trọng nhất — GA4 tính doanh thu và Google Ads tối ưu giá thầu dựa vào nó. Hai yêu cầu:
+          có <code>transaction_id</code>, và chỉ gửi <b>1 lần</b> cho mỗi đơn.
         </p>
-        <Code>{B5_PURCHASE}</Code>
+
+        <h3>Luồng thanh toán (giống website dùng Stripe)</h3>
         <p>
-          Trong GTM: tạo thêm 2 Data Layer Variable <code>ecommerce.transaction_id</code>, <code>ecommerce.currency</code> (xem{" "}
-          <a href="#bai-3b" className="text-accent underline">Bài 3.5</a>) và thêm{" "}
-          <code>purchase</code> vào regex của trigger.
+          Website thật không biết ngay khách trả tiền thành công hay chưa: cổng thanh toán xử lý vài giây rồi mới redirect về trang
+          của bạn. Lab mô phỏng đúng luồng đó:
         </p>
+        <Code>{B5_FLOW}</Code>
+        <p className="text-sm text-muted">
+          Ở bước thanh toán có khung <b>🧪 Mô phỏng cổng thanh toán</b> để chọn: thành công / thẻ bị từ chối / ngân hàng xử lý quá lâu.
+          “Database” là localStorage (<code>lab_orders</code>) nên mở link status ở tab khác vẫn thấy đơn — giống website thật.
+        </p>
+
+        <p>
+          Có <b>2 chỗ</b> cần viết — tìm <code>TODO Bài 5</code>: <b>(1/2)</b> hàm <code>trackPurchase</code> trong{" "}
+          <code>lib/datalayer.ts</code>, <b>(2/2)</b> chỗ gọi hàm trong <code>PaymentStatusClient.tsx</code>. Đọc gợi ý trong TODO và{" "}
+          <b>tự viết trước</b>; code bên dưới là đáp án để so. Chưa làm thì đơn vẫn chạy bình thường nhưng không có{" "}
+          <code>purchase</code> nào.
+        </p>
+
+        <h3>1. Hàm trackPurchase — gửi 1 lần cho mỗi mã đơn</h3>
+        <Code>{B5_TRACK}</Code>
+        <ul>
+          <li>
+            <b>Chống trùng bằng danh sách mã đơn đã gửi</b> (<code>lab_tracked_purchases</code>): reload trang status, mở lại link từ
+            email/lịch sử, React StrictMode… đều không gửi lại. Lưu ở localStorage (không phải sessionStorage) vì link có thể mở ở tab
+            khác.
+          </li>
+          <li><code>order.items</code> chỉ lưu <code>productId</code> → tra lại bằng <code>getProductById</code>; <code>flatMap</code> bỏ qua sản phẩm không tìm thấy.</li>
+          <li>
+            <code>customer_type</code>: <code>new</code> / <code>returning</code>. Lab đoán theo email đã từng đặt trên trình duyệt này;
+            web thật chỉ gửi khi biết chắc (tra hệ thống đơn hàng).
+          </li>
+        </ul>
+
+        <h3>2. Gọi ở trang status khi API báo Paid</h3>
+        <Code>{B5_STATUS}</Code>
+        <Warn title="Dùng res.data, KHÔNG dùng state vừa set">
+          <p>Lỗi này rất hay gặp trên website thật — purchase vẫn “fire” nhưng mọi giá trị đều undefined:</p>
+          <Code>{B5_BUG}</Code>
+          <p>
+            <code>setOrderData()</code> chỉ hẹn React cập nhật ở lần render sau; trong hàm <code>poll</code> (tạo từ lần render đầu),{" "}
+            <code>orderData</code> vẫn là giá trị cũ. Luôn lấy dữ liệu từ <b>biến vừa nhận được</b> (<code>res.data</code>).
+          </p>
+        </Warn>
+        <ul>
+          <li><b>Chỉ gửi khi Paid.</b> Failed hoặc hết thời gian chờ → không có doanh thu → không gửi.</li>
+          <li><b>Xoá giỏ khi Paid</b>, không xoá lúc bấm Đặt hàng — thẻ bị từ chối thì khách còn giỏ để thử lại.</li>
+          <li>
+            <code>clearTimeout(timer)</code> trong hàm dọn của <code>useEffect</code>: rời trang thì ngừng hỏi API.
+          </li>
+        </ul>
+
+        <h3>3. Trong GTM</h3>
+        <ol>
+          <li>
+            Thêm <code>purchase</code> vào regex của trigger <code>CE - ecommerce</code> (thêm <code>|purchase</code> trước{" "}
+            <code>)$</code>). Tag <code>GA4 - Event - ecommerce</code> tự gửi nhờ <code>{"{{Event}}"}</code>.
+          </li>
+          <li>
+            Tạo 2 Data Layer Variable cho Bài 6: <code>DLV - ecommerce.transaction_id</code> (
+            <code>ecommerce.transaction_id</code>) và <code>DLV - ecommerce.currency</code> (<code>ecommerce.currency</code>) — xem{" "}
+            <a href="#bai-3b" className="text-accent underline">Bài 3.5</a>.
+          </li>
+          <li>Save → Preview lại. GA4 → Admin → Events: kiểm tra <code>purchase</code> đã được đánh dấu là key event.</li>
+        </ol>
+
+        <h3>4. Kiểm tra cả 3 tình huống</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Làm</th>
+              <th>Phải thấy</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Đặt hàng, chọn <b>Thanh toán thành công</b> (thử thêm mã WELCOME10)</td>
+              <td>
+                Spinner ~5 giây → “Thanh toán thành công”. dataLayer có <code>purchase</code> với <code>transaction_id</code> dạng{" "}
+                <code>NM-…</code>, không ⚠. Giỏ hàng về 0.
+              </td>
+            </tr>
+            <tr>
+              <td>Reload trang status</td>
+              <td>Vẫn hiện thành công nhưng <b>KHÔNG</b> có purchase mới.</td>
+            </tr>
+            <tr>
+              <td>Copy URL trang status sang tab mới</td>
+              <td>Hiện đơn đã thanh toán, <b>KHÔNG</b> có purchase mới (đã có trong <code>lab_tracked_purchases</code>).</td>
+            </tr>
+            <tr>
+              <td>Đặt hàng, chọn <b>Thẻ bị từ chối</b></td>
+              <td>“Thanh toán không thành công”, giỏ còn nguyên, <b>không</b> có purchase.</td>
+            </tr>
+            <tr>
+              <td>Đặt hàng, chọn <b>Ngân hàng xử lý quá lâu</b></td>
+              <td>Hỏi API khoảng 10 lần trong 30 giây → “Chưa xác nhận được”, <b>không</b> có purchase.</td>
+            </tr>
+          </tbody>
+        </table>
         <Check
           items={[
-            "Đặt hàng → thấy purchase với transaction_id dạng NM-…",
-            "Reload trang cảm ơn → KHÔNG có purchase mới.",
-            "GA4 DebugView thấy purchase; vài giờ sau báo cáo Monetization → Ecommerce purchases có doanh thu.",
+            "Tag Assistant, mốc purchase: GA4 - Event - ecommerce ở Tags Fired; tab Variables: DLV - ecommerce.transaction_id = NM-…",
+            "Summary → Hits Sent có ô Purchase — đúng 1 ô cho mỗi đơn thành công.",
+            "GA4 DebugView thấy purchase có transaction_id, value, Items. Báo cáo Monetization → Ecommerce purchases có doanh thu sau 24–48 giờ.",
           ]}
         />
+
+        <h3>Tự kiểm tra hiểu bài</h3>
+        <ul>
+          <li>Xoá dòng <code>if (tracked.includes(…)) return;</code> rồi reload trang status 3 lần — dataLayer thấy gì? Doanh thu GA4 bị tính thế nào?</li>
+          <li>Vì sao gửi purchase ở trang status khi đã Paid, không gửi lúc bấm “Đặt hàng”?</li>
+          <li>
+            Khách đóng tab ngay sau khi trả tiền, trước khi về trang status → purchase có được gửi không? (Gợi ý: web thật gửi thêm từ
+            server khi nhận webhook của Stripe — GA4 Measurement Protocol, Meta Conversions API.)
+          </li>
+          <li>Dùng mã WELCOME10: <code>value</code> khác tổng price × quantity của items. GA4 dùng số nào cho Purchase revenue, số nào cho Item revenue?</li>
+        </ul>
       </Lesson>
 
       <Lesson id="bai-6">
+        <p>
+          Mục tiêu: khi có <code>purchase</code>, gửi thêm một <b>chuyển đổi</b> sang Google Ads kèm giá trị và mã đơn — để Google
+          Ads biết quảng cáo nào ra đơn và tối ưu giá thầu theo doanh thu (ROAS). <b>Không cần viết code</b>: dữ liệu đã có từ Bài 5,
+          chỉ cấu hình trong Google Ads và GTM.
+        </p>
+        <pre>{`dataLayer: purchase ─► GTM ─┬─► GA4 Event (Bài 4–5)          → báo cáo
+                            └─► Google Ads Conversion (Bài 6) → tối ưu quảng cáo
+Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─► ghép đơn với đúng click`}</pre>
+
+        <h3>Bước 1 — Tạo conversion action trong Google Ads</h3>
+        <p className="text-sm text-muted">
+          Chưa có tài khoản: vào <code>ads.google.com</code>, khi được hỏi tạo chiến dịch thì chọn <b>Switch to Expert Mode</b> →{" "}
+          <b>Create an account without a campaign</b> (chưa phải chạy quảng cáo hay nhập thanh toán). Tiền tệ chọn <b>VND</b> — không
+          đổi được về sau.
+        </p>
         <ol>
-          <li>Google Ads → Goals → Conversions → New → Website → tạo “Purchase”, chọn cài bằng Google Tag Manager → ghi lại <b>Conversion ID</b> và <b>Conversion Label</b>.</li>
-          <li>GTM → Tag <b>Conversion Linker</b>, trigger <b>All Pages</b>. Tag này lưu mã click quảng cáo (<code>gclid</code>) vào cookie <code>_gcl_aw</code>.</li>
           <li>
-            GTM → Tag <b>Google Ads Conversion Tracking</b>: Conversion ID/Label ở trên, Conversion Value ={" "}
-            <code>{"{{DLV - ecommerce.value}}"}</code>, Transaction ID = <code>{"{{DLV - ecommerce.transaction_id}}"}</code>, Currency ={" "}
-            <code>{"{{DLV - ecommerce.currency}}"}</code>. Trigger: Custom Event <code>purchase</code> (tạo trigger riêng).
+            Menu trái <b>Goals (Mục tiêu)</b> → <b>Conversions</b> → <b>Summary</b> → <b>+ Create conversion action</b>.
+          </li>
+          <li>
+            Chọn <b>Website</b> → nhập tên miền của bạn → <b>Scan</b>.
+          </li>
+          <li>
+            Kéo xuống “Create conversion actions manually using code” → <b>+ Add a conversion action manually</b>.
+          </li>
+          <li>
+            Điền (ý nghĩa từng ô: <Link href="/lab/glossary#ads" className="text-accent underline">Từ điển → Google Ads</Link>):
+            <table>
+              <thead>
+                <tr>
+                  <th>Ô</th>
+                  <th>Chọn</th>
+                  <th>Vì sao</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Goal and action optimization</td><td><b>Purchase</b></td><td>Loại chuyển đổi</td></tr>
+                <tr><td>Conversion name</td><td><code>Purchase - Nha Moc lab</code></td><td>Tên dễ nhận</td></tr>
+                <tr>
+                  <td>Value</td>
+                  <td><b>Use different values for each conversion</b>, mặc định <code>1</code> VND</td>
+                  <td>Mỗi đơn một giá trị — lấy từ tag</td>
+                </tr>
+                <tr><td>Count</td><td><b>Every</b></td><td>Mua hàng: đơn nào cũng tính</td></tr>
+                <tr><td>Click-through conversion window</td><td>30 days</td><td>Mặc định</td></tr>
+                <tr><td>Attribution</td><td>Data-driven</td><td>Mặc định</td></tr>
+              </tbody>
+            </table>
+          </li>
+          <li>
+            <b>Done</b> → <b>Save and continue</b> → màn hình cài tag chọn <b>Use Google Tag Manager</b> → ghi lại{" "}
+            <b>Conversion ID</b> (dãy số) và <b>Conversion Label</b> (chuỗi).
           </li>
         </ol>
+        <Warn title="Tài khoản đang chạy quảng cáo thật?">
+          <p>
+            Vào cài đặt conversion action vừa tạo → đặt là <b>Secondary</b>, để đơn giả của lab không làm lệch việc tối ưu giá thầu.
+          </p>
+        </Warn>
+
+        <h3>Bước 2 — Tag Conversion Linker</h3>
         <p>
-          Thử: vào <Link href="/lab/ads" className="text-accent underline">Mô phỏng click Ads</Link> → click quảng cáo (URL có{" "}
-          <code>gclid</code>) → DevTools → Application → Cookies thấy <code>_gcl_aw</code> → mua hàng.
+          Đọc <code>gclid</code> trên URL khi khách click quảng cáo và lưu vào cookie <code>_gcl_aw</code> (90 ngày) — vài trang sau,
+          vài ngày sau khách mới mua thì tag chuyển đổi vẫn biết họ đến từ click nào.
         </p>
+        <ol>
+          <li>Tags → <b>New</b> → tên <code>Conversion Linker</code> → loại <b>Conversion Linker</b> (để mặc định).</li>
+          <li>Triggering → <b>All Pages</b> (hoặc Initialization - All Pages) → Save.</li>
+        </ol>
+
+        <h3>Bước 3 — Trigger riêng cho purchase</h3>
+        <p>
+          Triggers → <b>New</b> → tên <code>CE - purchase</code> → <b>Custom Event</b>, Event name <code>purchase</code> (không tick
+          regex) → Save.
+        </p>
+        <Warn title="Đừng gắn tag Ads vào CE - ecommerce">
+          <p>
+            Trigger đó khớp cả 10 event (view_item, add_to_cart…) → Google Ads ghi nhận mỗi lần xem sản phẩm là một “mua hàng”, tối ưu
+            sai hoàn toàn. Tương tự: đừng đặt lệnh <code>gtag(&apos;event&apos;, &apos;conversion&apos;, …)</code> trong layout — nó chạy ở{" "}
+            <b>mọi trang</b>.
+          </p>
+        </Warn>
+
+        <h3>Bước 4 — Tag Google Ads Conversion Tracking</h3>
+        <ol>
+          <li>Tags → <b>New</b> → tên <code>Ads - Conversion - Purchase</code> → <b>Google Ads</b> → <b>Google Ads Conversion Tracking</b>.</li>
+          <li>
+            Điền (chọn biến bằng biểu tượng viên gạch ➕):
+            <table>
+              <thead>
+                <tr>
+                  <th>Ô</th>
+                  <th>Giá trị</th>
+                  <th>Để làm gì</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Conversion ID</td><td>số ở Bước 1</td><td>Tài khoản Ads nhận</td></tr>
+                <tr><td>Conversion Label</td><td>chuỗi ở Bước 1</td><td>Đúng conversion action “Purchase”</td></tr>
+                <tr><td>Conversion Value</td><td><code>{"{{DLV - ecommerce.value}}"}</code></td><td>Tính ROAS</td></tr>
+                <tr>
+                  <td>Transaction ID</td>
+                  <td><code>{"{{DLV - ecommerce.transaction_id}}"}</code></td>
+                  <td>Google Ads bỏ chuyển đổi trùng mã — lớp chống trùng thứ 2 sau Bài 5</td>
+                </tr>
+                <tr><td>Currency Code</td><td><code>{"{{DLV - ecommerce.currency}}"}</code></td><td>Quy đổi đúng tiền tệ</td></tr>
+              </tbody>
+            </table>
+          </li>
+          <li>Triggering → <b>chỉ</b> <code>CE - purchase</code> → Save.</li>
+          <li>
+            Nếu GTM báo kiểu <b>“Google tag not found”</b> cho <code>AW-…</code>: bấm theo gợi ý để tạo <b>Google Tag</b> với Tag ID{" "}
+            <code>AW-&lt;Conversion ID&gt;</code>, trigger <b>Initialization - All Pages</b> — cần cho chuyển đổi và Enhanced
+            Conversions (Bài 8) hoạt động đầy đủ.
+          </li>
+          <li>Bấm <b>Preview</b>.</li>
+        </ol>
+
+        <h3>Bước 5 — Thử như khách đến từ quảng cáo</h3>
+        <ol>
+          <li>
+            Mở <Link href="/lab/ads" className="text-accent underline">Mô phỏng click Ads</Link> → chọn chiến dịch → giữ{" "}
+            <b>Auto-tagging</b> bật → <b>Click quảng cáo → landing</b>. URL mới có <code>utm_…</code> và <code>gclid=…</code>.
+          </li>
+          <li>
+            <b>F12 → Application → Cookies → localhost</b>: thấy cookie <code>_gcl_aw</code> (dạng <code>GCL.1732….&lt;gclid&gt;</code>)
+            → Conversion Linker đã chạy.
+          </li>
+          <li>Mua hàng → thanh toán → chọn “Thanh toán thành công”.</li>
+        </ol>
+        <table>
+          <thead>
+            <tr>
+              <th>Ở đâu</th>
+              <th>Phải thấy</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Mốc Initialization / Container Loaded</td><td><code>Conversion Linker</code> ở Fired</td></tr>
+            <tr><td>Mốc view_item, add_to_cart…</td><td><code>Ads - Conversion - Purchase</code> ở <b>Not Fired</b></td></tr>
+            <tr><td>Mốc purchase</td><td><code>Ads - Conversion - Purchase</code> ở <b>Fired</b>, đúng 1 lần</td></tr>
+            <tr><td>Mốc purchase → bấm vào tag Ads</td><td>Value = số tiền, Transaction ID = <code>NM-…</code>, Currency = <code>VND</code></td></tr>
+            <tr><td>Reload trang status</td><td>Không có purchase mới → tag Ads không fire lại</td></tr>
+            <tr><td>Đơn “Thẻ bị từ chối”</td><td>Tag Ads <b>không</b> fire</td></tr>
+          </tbody>
+        </table>
         <p className="text-sm text-muted">
-          gclid trong lab là giả nên Google Ads sẽ không ghi nhận chuyển đổi thật — bài này để bạn thấy cơ chế và kiểm tra tag fire
-          đúng. Bài tập thêm: push <code>generate_lead</code> ở form chân trang (tìm <code>TODO Bài 6</code>) và tạo chuyển đổi phụ.
+          gclid trong lab là giả nên Google Ads <b>không</b> hiện chuyển đổi trong báo cáo — bài này để thấy cơ chế và kiểm tra tag
+          đúng. Sau khi Publish GTM và có người vào tên miền thật, conversion action chuyển từ <i>Unverified</i> sang có tín hiệu tag;
+          chuyển đổi thật chỉ có khi có click quảng cáo thật.
         </p>
         <Check
           items={[
+            "Cookie _gcl_aw xuất hiện sau khi click quảng cáo giả.",
             "Conversion Linker fire ở mọi trang.",
-            "Tag Ads Conversion fire đúng 1 lần ở purchase, tab Variables thấy value và transaction_id có giá trị.",
+            "Tag Ads Conversion fire đúng 1 lần ở purchase, với Value, Transaction ID, Currency có giá trị.",
+            "Không fire ở event khác, không fire khi reload hay khi thẻ bị từ chối.",
           ]}
         />
+
+        <h3>Bài tập thêm — chuyển đổi phụ generate_lead</h3>
+        <ol>
+          <li>
+            Form chân trang (<code>components/SiteFooter.tsx</code>, tìm <code>TODO Bài 6</code>): push <code>generate_lead</code> với{" "}
+            <code>value</code> ước tính (vd. <code>50000</code>) và <code>currency: &quot;VND&quot;</code>. <b>Không</b> đưa email thô
+            vào dataLayer.
+          </li>
+          <li>Google Ads: tạo conversion action loại <b>Submit lead form</b>, Count = <b>One</b>, đặt <b>Secondary</b>.</li>
+          <li>GTM: trigger <code>CE - generate_lead</code> + tag Ads Conversion thứ hai.</li>
+        </ol>
+
+        <h3>Tự kiểm tra hiểu bài</h3>
+        <ul>
+          <li>Xoá tag Conversion Linker rồi mua sau khi click quảng cáo giả — còn cookie <code>_gcl_aw</code> không? Google Ads ghép đơn với click bằng gì?</li>
+          <li>Vì sao Count chọn <b>Every</b> cho mua hàng nhưng <b>One</b> cho lead?</li>
+          <li>Gửi Value <b>gồm</b> phí ship thì ROAS trên Google Ads sai theo hướng nào?</li>
+        </ul>
       </Lesson>
 
       <Lesson id="bai-7">

@@ -7,7 +7,7 @@ import { computeTotals } from "@/lib/cart";
 import { formatVND } from "@/lib/products";
 import { useHydrated, useTrackOnce } from "@/lib/hooks";
 import { ProductImage } from "@/components/ProductImage";
-import { pushEcommerce, toItem } from "@/lib/dataLayer";
+import { pushEcommerce, toItem } from "@/lib/datalayer";
 
 export default function CartPage() {
   const hydrated = useHydrated();

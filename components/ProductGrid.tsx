@@ -4,7 +4,7 @@ import Link from "next/link";
 import { PRODUCTS, formatVND, type Product } from "@/lib/products";
 import { useTrackOnce } from "@/lib/hooks";
 import { ProductImage } from "./ProductImage";
-import { pushEcommerce, toItem } from "@/lib/dataLayer";
+import { pushEcommerce, toItem } from "@/lib/datalayer";
 
 export function ProductGrid({
   listId,
@@ -19,7 +19,6 @@ export function ProductGrid({
   useTrackOnce(listId, () => {
     // TODO Bài 4 — push event "view_item_list"
     //   item_list_id = listId, item_list_name = listName, items = danh sách `products`
-    void listName;
     pushEcommerce("view_item_list", {
       item_list_id: listId,
       item_list_name: listName,
@@ -35,7 +34,6 @@ export function ProductGrid({
             href={`/products/${p.slug}`}
             onClick={() => {
               // TODO Bài 4 — push event "select_item" cho sản phẩm `p` (vị trí `index` trong danh sách)
-              void index;
               pushEcommerce("select_item", {
                 item_list_id: listId,
                 item_list_name: listName,

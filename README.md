@@ -19,7 +19,7 @@ Mở http://localhost:3000/lab/guide và bắt đầu từ Bài 0. Tìm chỗ c�
 
 | Trang | Mục đích |
 | --- | --- |
-| `/` → `/products/[slug]` → `/cart` → `/checkout` → `/checkout/success` | Flow mua hàng — nơi bạn gắn các event |
+| `/` → `/products/[slug]` → `/cart` → `/checkout` → `/checkout/status/[order]` | Flow mua hàng — nơi bạn gắn các event |
 | `/lab/guide` | 10 bài học từng bước (code + GTM + cách kiểm tra) |
 | `/lab/ads` | Tạo URL click quảng cáo giả (gclid, UTM) để thử Conversion Linker |
 | Nút `dataLayer` góc phải | Xem nội dung `window.dataLayer`, cảnh báo lỗi dữ liệu ecommerce |

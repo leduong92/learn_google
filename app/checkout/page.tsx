@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { cartStore, saveLastOrder, type Order } from "@/lib/lab-state";
+import { cartStore, type Order } from "@/lib/lab-state";
+import { PAYMENT_OUTCOMES, createOrder, type PaymentOutcome } from "@/lib/order-api";
 import { computeTotals } from "@/lib/cart";
 import { PAYMENT_OPTIONS, SHIPPING_OPTIONS, formatVND } from "@/lib/products";
 import { useHydrated, useTrackOnce } from "@/lib/hooks";
-import { pushEcommerce, toItem } from "@/lib/dataLayer";
+import { pushEcommerce, toItem } from "@/lib/datalayer";
 
 type Customer = Order["customer"];
 
@@ -53,6 +54,7 @@ export default function CheckoutPage() {
   const [placing, setPlacing] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [ecConsent, setEcConsent] = useState(false);
+  const [outcome, setOutcome] = useState<PaymentOutcome>("success");
 
   const shipping = SHIPPING_OPTIONS.find((s) => s.id === shippingId)!;
   const payment = PAYMENT_OPTIONS.find((p) => p.id === paymentId)!;
@@ -126,14 +128,13 @@ export default function CheckoutPage() {
       value,
       customer,
       channel: "",
-      tracked: false,
       new_customer: isNew,
       ec_consent: ecConsent,
     };
-    saveLastOrder(order);
-    cartStore.set({ lines: [], coupon: "" });
-    // Giả lập thời gian xử lý thanh toán
-    window.setTimeout(() => router.push("/checkout/success"), 600);
+    // "Backend" tạo đơn ở trạng thái Pending. Giỏ hàng CHƯA xoá — chỉ xoá khi thanh toán thành công.
+    createOrder(order, outcome);
+    // Giống Stripe redirect về return_url sau khi khách xác nhận thanh toán
+    window.setTimeout(() => router.push(`/checkout/status/${order.transaction_id}`), 600);
   }
 
   if (!hydrated)
@@ -349,15 +350,40 @@ export default function CheckoutPage() {
                 ))}
               </div>
             </fieldset>
+            <fieldset className="rounded-lg border border-dashed border-line p-4">
+              <legend className="px-1 text-sm font-semibold">
+                🧪 Mô phỏng cổng thanh toán (kiểu Stripe)
+              </legend>
+              <p className="mb-2 text-xs text-muted">
+                Chọn kết quả để luyện các tình huống trên trang trạng thái thanh toán. Không có thanh toán thật.
+              </p>
+              <div className="space-y-1.5">
+                {PAYMENT_OUTCOMES.map((o) => (
+                  <label key={o.id} className="flex cursor-pointer items-start gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="outcome"
+                      className="mt-1"
+                      checked={outcome === o.id}
+                      onChange={() => setOutcome(o.id)}
+                    />
+                    <span>
+                      {o.label} <span className="text-xs text-muted">— {o.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <button
               className="btn-primary w-full py-3"
               onClick={placeOrder}
               disabled={placing}
             >
-              {placing ? "Đang xử lý…" : `Đặt hàng — ${formatVND(total)}`}
+              {placing ? "Đang chuyển tới cổng thanh toán…" : `Đặt hàng — ${formatVND(total)}`}
             </button>
             <p className="text-xs text-muted">
-              Không có thanh toán thật. Bấm sẽ chuyển sang trang cảm ơn.
+              Bấm sẽ chuyển sang trang trạng thái thanh toán{" "}
+              <code className="font-mono">/checkout/status/[mã đơn]</code>.
             </p>
           </div>
         )}
