@@ -139,7 +139,7 @@ export function bumpStat(
   });
 }
 
-/* ---------------- Đơn hàng cuối (trang cảm ơn) ---------------- */
+/* ---------------- Đơn hàng ---------------- */
 
 export type Order = {
   transaction_id: string;
@@ -167,21 +167,8 @@ export type Order = {
   new_customer: boolean;
   /** Người dùng tích ô đồng ý chia sẻ dữ liệu băm cho Enhanced Conversions */
   ec_consent: boolean;
-  tracked: boolean;
 };
-
-export function saveLastOrder(o: Order) {
-  sessionStorage.setItem("lab_last_order", JSON.stringify(o));
-}
-
-export function loadLastOrder(): Order | null {
-  try {
-    const raw = sessionStorage.getItem("lab_last_order");
-    return raw ? (JSON.parse(raw) as Order) : null;
-  } catch {
-    return null;
-  }
-}
+// Đơn hàng được "backend" giả lập lưu và trả về — xem lib/order-api.ts
 
 /* ---------------- Xoá dữ liệu (quyền xoá của chủ thể dữ liệu) ---------------- */
 
@@ -192,6 +179,8 @@ export const LAB_STORAGE_KEYS = [
   "lab_consent_ui",
   "lab_settings",
   "lab_customers",
+  "lab_orders",
+  "lab_tracked_purchases",
 ];
 
 /** Xoá mọi dữ liệu website lưu trong trình duyệt này. Cookie của Google do Google quản lý. */

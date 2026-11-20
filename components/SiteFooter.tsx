@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { bumpStat, consentStore } from "@/lib/lab-state";
-import { currentChannel, pushDL, sha256 } from "@/lib/tracking";
+import { consentStore } from "@/lib/lab-state";
 import { SITE } from "@/lib/site-config";
 
 export function SiteFooter() {
@@ -11,21 +10,11 @@ export function SiteFooter() {
   const [agree, setAgree] = useState(false);
   const [done, setDone] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!agree) return;
-    const normalized = email.trim().toLowerCase();
-    // Chỉ đính kèm email (dạng băm) khi người dùng đã cho phép ad_user_data
-    const canShare = consentStore.get().state.ad_user_data === "granted";
-    // generate_lead: chuyển đổi phụ (secondary conversion) trong Google Ads
-    pushDL({
-      event: "generate_lead",
-      lead_source: "footer_newsletter",
-      value: 50_000, // giá trị ước tính của 1 lead
-      currency: "VND",
-      ...(canShare ? { user_data_sha256: { sha256_email_address: await sha256(normalized) } } : {}),
-    });
-    bumpStat(currentChannel(), "leads");
+    // TODO Bài 6 (bài tập thêm) — push event "generate_lead" (value ước tính, currency "VND")
+    //   KHÔNG đưa email thô vào dataLayer.
     setDone(true);
   }
 
@@ -56,10 +45,10 @@ export function SiteFooter() {
         </div>
         <form onSubmit={onSubmit} className="md:justify-self-end">
           <label htmlFor="nl-email" className="label">
-            Thử form đăng ký (bắn sự kiện <code className="font-mono">generate_lead</code>)
+            Thử form đăng ký (luyện sự kiện <code className="font-mono">generate_lead</code>)
           </label>
           {done ? (
-            <p className="text-sm text-accent">Đã ghi nhận event. Mở Debug panel để xem.</p>
+            <p className="text-sm text-accent">Đã gửi (demo).</p>
           ) : (
             <>
               <div className="flex gap-2">

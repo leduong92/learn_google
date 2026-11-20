@@ -1,12 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { CAMPAIGNS } from "@/lib/campaigns";
 import { PRODUCTS, formatVND } from "@/lib/products";
-import { fakeGclid, simulateTraffic } from "@/lib/simulate";
-import { attributionStore, channelKey } from "@/lib/lab-state";
-import { useHydrated } from "@/lib/hooks";
 
 const LANDINGS = [
   { path: "/", label: "Trang chủ" },
@@ -14,17 +10,21 @@ const LANDINGS = [
   ...PRODUCTS.map((p) => ({ path: `/products/${p.slug}`, label: `SP: ${p.name}` })),
 ];
 
+/** GCLID giả, trông giống thật (Cj0KCQ…). Google Ads sẽ không nhận mã này. */
+function fakeGclid() {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
+  let s = "Cj0KCQiA";
+  for (let i = 0; i < 72; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s + "_BwE";
+}
+
 export default function AdsLabPage() {
-  const hydrated = useHydrated();
-  const attribution = attributionStore.useStore();
   const [campaignId, setCampaignId] = useState(CAMPAIGNS[0].id);
   const c = CAMPAIGNS.find((x) => x.id === campaignId)!;
   const [landing, setLanding] = useState<string | null>(null);
   const [adVariant, setAdVariant] = useState("rsa_a");
   const [autoTagging, setAutoTagging] = useState(true);
   const [useUtm, setUseUtm] = useState(true);
-  const [simCount, setSimCount] = useState(200);
-  const [simMsg, setSimMsg] = useState("");
 
   const lp = landing ?? c.landing;
 
@@ -49,10 +49,6 @@ export default function AdsLabPage() {
     window.location.href = buildUrl(fakeGclid());
   }
 
-  function runSim() {
-    const s = simulateTraffic(c, simCount);
-    setSimMsg(`+${s.clicks} click, ${s.add_to_cart} add_to_cart, ${s.purchase} đơn, doanh thu ${formatVND(s.revenue)}`);
-  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
@@ -63,7 +59,7 @@ export default function AdsLabPage() {
         purchase xảy ra, tag chuyển đổi Google Ads biết đơn hàng đến từ click nào.
       </p>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px]">
+      <div className="mt-8 max-w-3xl">
         <div className="space-y-6">
           <fieldset>
             <legend className="mb-2 font-semibold">Chiến dịch</legend>
@@ -149,38 +145,6 @@ export default function AdsLabPage() {
           </p>
         </div>
 
-        <aside className="space-y-6">
-          <div className="card p-5">
-            <p className="font-semibold">Attribution hiện tại</p>
-            {!hydrated ? (
-              <p className="mt-2 text-sm text-muted">…</p>
-            ) : (
-              <dl className="mt-3 space-y-1 text-sm">
-                <div className="flex justify-between gap-3"><dt className="text-muted">Kênh (last click)</dt><dd className="font-mono">{channelKey(attribution.last)}</dd></div>
-                <div className="flex justify-between gap-3"><dt className="text-muted">First touch</dt><dd className="font-mono">{channelKey(attribution.first)}</dd></div>
-                <div className="flex justify-between gap-3"><dt className="text-muted">gclid</dt><dd className="truncate font-mono">{attribution.last?.gclid ? attribution.last.gclid.slice(0, 16) + "…" : "—"}</dd></div>
-              </dl>
-            )}
-            <p className="mt-3 text-xs text-muted">
-              Truy cập trực tiếp (không có tham số) không ghi đè — giống mô hình “last non-direct click”.
-            </p>
-          </div>
-
-          <div className="card p-5">
-            <p className="font-semibold">Mô phỏng traffic hàng loạt</p>
-            <p className="mt-1 text-sm text-muted">
-              Sinh nhanh N click cho chiến dịch <b>{c.name}</b> với tỉ lệ chuyển đổi đặc trưng của nó — để có dữ liệu luyện tối ưu ở trang Phễu.
-              (Không push vào dataLayer.)
-            </p>
-            <div className="mt-3 flex gap-2">
-              <label htmlFor="simn" className="sr-only">Số click</label>
-              <input id="simn" type="number" min={10} max={5000} step={10} className="field w-28" value={simCount} onChange={(e) => setSimCount(Number(e.target.value) || 0)} />
-              <button className="btn-ghost" onClick={runSim} disabled={simCount <= 0}>Chạy mô phỏng</button>
-            </div>
-            {simMsg && <p className="mt-2 text-xs text-accent">{simMsg}</p>}
-            <Link href="/lab/funnel" className="mt-3 inline-block text-sm text-accent underline underline-offset-2">Xem phễu →</Link>
-          </div>
-        </aside>
       </div>
     </div>
   );

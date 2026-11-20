@@ -5,9 +5,10 @@ import { useEffect, useState } from "react";
 
 type GtmStatus = { id: string; loaded: boolean };
 
+/** Tự phát hiện GTM: khi container load xong, GTM tạo window.google_tag_manager["GTM-XXXX"] */
 function readStatus(): GtmStatus {
-  const id = window.__labGtmId || "";
-  return { id, loaded: !!(id && window.google_tag_manager?.[id]) };
+  const id = Object.keys(window.google_tag_manager ?? {}).find((k) => k.startsWith("GTM-")) ?? "";
+  return { id, loaded: !!id };
 }
 
 export function LabBar() {
@@ -28,22 +29,19 @@ export function LabBar() {
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-1 px-4 py-2 text-xs">
         <span className="font-mono font-semibold tracking-wide text-[#9fd3a7]">GTM / ADS LAB</span>
         <nav className="flex flex-wrap gap-x-4 gap-y-1">
-          <Link href="/lab/ads" className="hover:text-white">① Mô phỏng click Ads</Link>
-          <Link href="/lab/funnel" className="hover:text-white">② Phễu &amp; ROAS</Link>
-          <Link href="/lab/guide" className="hover:text-white">③ Hướng dẫn GTM</Link>
-          <Link href="/lab/settings" className="hover:text-white">⚙ Cài đặt</Link>
+          <Link href="/lab/guide" className="hover:text-white">📘 Bài học</Link>
+          <Link href="/lab/glossary" className="hover:text-white">📖 Từ điển</Link>
+          <Link href="/lab/ads" className="hover:text-white">Mô phỏng click Ads</Link>
         </nav>
         <span className="ml-auto font-mono">
           {status === null ? (
             "GTM: …"
-          ) : !status.id ? (
-            <Link href="/lab/settings" className="text-[#f5c26b] hover:underline">
-              GTM: chưa cấu hình ID
-            </Link>
           ) : status.loaded ? (
             <span className="text-[#9fd3a7]">GTM: {status.id} ● đã load</span>
           ) : (
-            <span className="text-[#f5c26b]">GTM: {status.id} ○ chưa load (adblock / sai ID?)</span>
+            <Link href="/lab/guide#bai-1" className="text-[#f5c26b] hover:underline">
+              GTM: chưa nhúng → làm Bài 1
+            </Link>
           )}
         </span>
       </div>

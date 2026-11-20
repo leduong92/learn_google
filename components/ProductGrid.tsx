@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { PRODUCTS, formatVND, type Product } from "@/lib/products";
 import { useTrackOnce } from "@/lib/hooks";
-import { toItem, trackEcommerce } from "@/lib/tracking";
 import { ProductImage } from "./ProductImage";
+import { pushEcommerce, toItem } from "@/lib/datalayer";
 
 export function ProductGrid({
   listId,
@@ -15,12 +15,14 @@ export function ProductGrid({
   listName: string;
   products?: Product[];
 }) {
-  // view_item_list: khi danh sách sản phẩm hiển thị
+  // Chạy 1 lần khi danh sách hiển thị (đã chặn việc React dev chạy effect 2 lần)
   useTrackOnce(listId, () => {
-    trackEcommerce("view_item_list", {
+    // TODO Bài 4 — push event "view_item_list"
+    //   item_list_id = listId, item_list_name = listName, items = danh sách `products`
+    pushEcommerce("view_item_list", {
       item_list_id: listId,
       item_list_name: listName,
-      items: products.map((p, index) => toItem(p, { index, listId, listName })),
+      items: products.map((p, index) => ({ ...toItem(p), index })),
     });
   });
 
@@ -30,22 +32,29 @@ export function ProductGrid({
         <li key={p.id}>
           <Link
             href={`/products/${p.slug}`}
-            // select_item: người dùng click vào 1 sản phẩm trong danh sách
-            onClick={() =>
-              trackEcommerce("select_item", {
+            onClick={() => {
+              // TODO Bài 4 — push event "select_item" cho sản phẩm `p` (vị trí `index` trong danh sách)
+              pushEcommerce("select_item", {
                 item_list_id: listId,
                 item_list_name: listName,
-                items: [toItem(p, { index, listId, listName })],
-              })
-            }
+                items: [{ ...toItem(p), index }],
+              });
+            }}
             className="group block"
           >
-            <ProductImage product={p} className="aspect-[4/3] text-6xl transition-transform group-hover:scale-[1.02]" />
+            <ProductImage
+              product={p}
+              className="aspect-[4/3] text-6xl transition-transform group-hover:scale-[1.02]"
+            />
             <p className="mt-3 text-sm text-muted">{p.category}</p>
             <p className="font-medium leading-snug">{p.name}</p>
             <p className="mt-1 text-sm">
               <span className="font-semibold">{formatVND(p.price)}</span>
-              {p.compareAt && <span className="ml-2 text-muted line-through">{formatVND(p.compareAt)}</span>}
+              {p.compareAt && (
+                <span className="ml-2 text-muted line-through">
+                  {formatVND(p.compareAt)}
+                </span>
+              )}
             </p>
           </Link>
         </li>
