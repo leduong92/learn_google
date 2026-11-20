@@ -51,28 +51,97 @@ window.dataLayer.push({
   },
 });`;
 
-const B4_HELPER = `// lib/datalayer.ts — tự tạo file này để khỏi lặp code
+const B4_HELPER = `// lib/datalayer.ts — tự tạo file mới này
 import type { Product } from "./products";
 
+/** Đổi 1 sản phẩm thành 1 phần tử của mảng items (tên chuẩn GA4) */
 export function toItem(p: Product, quantity = 1, variant?: string) {
   return {
     item_id: p.id,
     item_name: p.name,
     item_brand: p.brand,
     item_category: p.category,
+    item_category2: p.category2,
     item_variant: variant,
     price: p.price,
     quantity,
   };
 }
 
+/** Reset ecommerce + push event; currency mặc định VND */
 export function pushEcommerce(event: string, ecommerce: Record<string, unknown>) {
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({ ecommerce: null });
   window.dataLayer.push({ event, ecommerce: { currency: "VND", ...ecommerce } });
-}
+}`;
 
-// Dùng:  pushEcommerce("view_item", { value: p.price, items: [toItem(p)] });`;
+const B4_IMPORT = `import { pushEcommerce, toItem } from "@/lib/datalayer";`;
+
+const B4_GRID = `// components/ProductGrid.tsx
+// ① trong useTrackOnce (xoá dòng "void listName;")
+pushEcommerce("view_item_list", {
+  item_list_id: listId,
+  item_list_name: listName,
+  items: products.map((p, index) => ({ ...toItem(p), index })),
+});
+
+// ② trong onClick của <Link> (xoá dòng "void index;")
+pushEcommerce("select_item", {
+  item_list_id: listId,
+  item_list_name: listName,
+  items: [{ ...toItem(p), index }],
+});`;
+
+const B4_DETAIL = `// app/products/[slug]/ProductDetail.tsx
+// ③ trong useTrackOnce
+pushEcommerce("view_item", { value: p.price, items: [toItem(p)] });
+
+// Viết lại add_to_cart của Bài 3 trong addToCart() — 20 dòng còn 1:
+pushEcommerce("add_to_cart", { value: p.price * qty, items: [toItem(p, qty, variant)] });`;
+
+const B4_CART = `// app/cart/page.tsx
+// ④ trong useTrackOnce
+pushEcommerce("view_cart", {
+  value,
+  items: resolved.map((l) => toItem(l.product, l.quantity, l.variant)),
+});
+
+// ⑤ cuối hàm changeQty() — bấm + → add_to_cart; bấm − hoặc Xoá → remove_from_cart
+const n = Math.abs(diff);
+pushEcommerce(diff > 0 ? "add_to_cart" : "remove_from_cart", {
+  value: line.product.price * n,
+  items: [toItem(line.product, n, line.variant)],
+});`;
+
+const B4_CHECKOUT = `// app/checkout/page.tsx
+// Thêm 1 dòng ngay dưới "const coupon = ...":
+const items = resolved.map((l) => toItem(l.product, l.quantity, l.variant));
+
+// ⑥ trong useTrackOnce
+pushEcommerce("begin_checkout", { value, coupon: coupon || undefined, items });
+
+// ⑦ trong submitInfo()
+pushEcommerce("add_shipping_info", {
+  value, coupon: coupon || undefined, shipping_tier: shipping.id, items,
+});
+
+// ⑧ trong placeOrder()
+pushEcommerce("add_payment_info", {
+  value, coupon: coupon || undefined, payment_type: payment.id, items,
+});`;
+
+const B4_REGEX = `^(view_item_list|select_item|view_item|add_to_cart|remove_from_cart|view_cart|begin_checkout|add_shipping_info|add_payment_info)$`;
+
+const WALK: [string, string][] = [
+  ["Mở trang chủ", "view_item_list (home_featured)"],
+  ["Click Sofa", "select_item → view_item → view_item_list (Sản phẩm liên quan)"],
+  ["Bấm Thêm vào giỏ", "add_to_cart"],
+  ["Mở Giỏ hàng", "view_cart"],
+  ["Bấm + rồi −", "add_to_cart → remove_from_cart"],
+  ["Bấm Thanh toán", "begin_checkout"],
+  ["Điền thông tin → Tiếp tục", "add_shipping_info"],
+  ["Bấm Đặt hàng", "add_payment_info (rồi chuyển sang trang cảm ơn — purchase là Bài 5)"],
+];
 
 const B5_PURCHASE = `// app/checkout/success/page.tsx — chỗ "TODO Bài 5"
 // Nhớ import: saveLastOrder (từ "@/lib/lab-state"), pushEcommerce + toItem (từ "@/lib/datalayer")
@@ -135,6 +204,7 @@ const LESSONS = [
   ["bai-1", "Bài 1", "Nhúng GTM vào website"],
   ["bai-2", "Bài 2", "GA4: đếm lượt xem trang (không cần code)"],
   ["bai-3", "Bài 3", "Event đầu tiên: add_to_cart"],
+  ["bai-3b", "Bài 3.5", "Variables: tạo biến & cách dùng"],
   ["bai-4", "Bài 4", "Cả phễu mua hàng"],
   ["bai-5", "Bài 5", "purchase & chống đếm trùng"],
   ["bai-6", "Bài 6", "Google Ads: chuyển đổi mua hàng"],
@@ -143,15 +213,33 @@ const LESSONS = [
   ["bai-9", "Bài 9", "Publish & đưa lên mạng"],
 ] as const;
 
+const DLV_SET: [string, string, string][] = [
+  ["DLV - ecommerce.value", "ecommerce.value", "Bài 3, 6 (giá trị chuyển đổi), trigger giá trị cao"],
+  ["DLV - ecommerce.currency", "ecommerce.currency", "Bài 6 (Currency của tag Ads)"],
+  ["DLV - ecommerce.transaction_id", "ecommerce.transaction_id", "Bài 5, 6 (chống đếm trùng)"],
+  ["DLV - ecommerce.items", "ecommerce.items", "Xem cả mảng khi gỡ lỗi; đầu vào cho Custom JS"],
+  ["DLV - item_id", "ecommerce.items.0.item_id", "Remarketing theo sản phẩm"],
+  ["DLV - item_variant", "ecommerce.items.0.item_variant", "Lọc trigger theo màu/kích thước"],
+  ["DLV - user_data.email", "user_data.email", "Bài 8 (Enhanced Conversions)"],
+];
+
+const CJS_QTY = `// Tên biến: CJS - tổng số lượng   (loại Custom JavaScript)
+function () {
+  var items = {{DLV - ecommerce.items}} || [];
+  var total = 0;
+  for (var i = 0; i < items.length; i++) total += items[i].quantity || 0;
+  return total;
+}`;
+
 const FUNNEL: [string, string, string][] = [
-  ["view_item_list", "components/ProductGrid.tsx (useTrackOnce)", "item_list_id, item_list_name, items"],
-  ["select_item", "components/ProductGrid.tsx (onClick)", "item_list_id, items[1 sản phẩm]"],
-  ["view_item", "app/products/[slug]/ProductDetail.tsx", "value, items"],
-  ["view_cart", "app/cart/page.tsx", "value, items"],
-  ["add_to_cart / remove_from_cart", "app/cart/page.tsx (changeQty)", "value, items"],
-  ["begin_checkout", "app/checkout/page.tsx (useTrackOnce)", "value, coupon, items"],
-  ["add_shipping_info", "app/checkout/page.tsx (submitInfo)", "+ shipping_tier"],
-  ["add_payment_info", "app/checkout/page.tsx (placeOrder)", "+ payment_type"],
+  ["① view_item_list", "components/ProductGrid.tsx (useTrackOnce)", "item_list_id, item_list_name, items (+ index)"],
+  ["② select_item", "components/ProductGrid.tsx (onClick)", "item_list_id, item_list_name, items[1 sản phẩm + index]"],
+  ["③ view_item", "app/products/[slug]/ProductDetail.tsx", "value, items"],
+  ["④ view_cart", "app/cart/page.tsx (useTrackOnce)", "value, items"],
+  ["⑤ add_to_cart / remove_from_cart", "app/cart/page.tsx (changeQty)", "value, items (phần thay đổi)"],
+  ["⑥ begin_checkout", "app/checkout/page.tsx (useTrackOnce)", "value, coupon, items"],
+  ["⑦ add_shipping_info", "app/checkout/page.tsx (submitInfo)", "+ shipping_tier"],
+  ["⑧ add_payment_info", "app/checkout/page.tsx (placeOrder)", "+ payment_type"],
 ];
 
 function Code({ children }: { children: string }) {
@@ -175,6 +263,15 @@ function Check({ items }: { items: string[] }) {
   );
 }
 
+function Warn({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="my-4 rounded-lg border border-[#ecd3a6] bg-[#fbf3e4] px-4 py-3">
+      <p className="text-sm font-semibold text-[#8a5a12]">⚠ {title}</p>
+      <div className="mt-1 text-[15px] leading-7">{children}</div>
+    </div>
+  );
+}
+
 function Lesson({ id, children }: { id: string; children: React.ReactNode }) {
   const l = LESSONS.find((x) => x[0] === id)!;
   return (
@@ -194,6 +291,13 @@ export default function GuidePage() {
       <p className="mt-3 text-muted">
         Cửa hàng này <b>chưa có dòng tracking nào</b>. Bạn sẽ tự nhúng GTM, tự viết từng <code>dataLayer.push</code>, rồi tự cấu
         hình GTM → GA4 → Google Ads. Mỗi bài có: việc cần làm trong code, việc cần làm trong GTM, và cách kiểm tra.
+      </p>
+      <p className="mt-2 text-muted">
+        Gặp menu, trường hay thuật ngữ lạ? Tra trong{" "}
+        <Link href="/lab/glossary" className="text-accent underline">
+          📖 Từ điển
+        </Link>{" "}
+        (có ô tìm kiếm, gõ không dấu được).
       </p>
 
       <nav className="card my-6 p-4">
@@ -259,9 +363,37 @@ export default function GuidePage() {
           để chắc chắn nó luôn có sẵn khi GTM chạy. Vì sao không dán nguyên văn? JSX không cho viết nội dung bên trong thẻ{" "}
           <code>&lt;script&gt;</code> như HTML, phải dùng <code>dangerouslySetInnerHTML</code>.
         </p>
-        <h3>Trong GTM</h3>
-        <p>
-          Chưa cần tạo gì. Bấm <b>Preview</b> → nhập <code>http://localhost:3000</code> → <b>Connect</b>.
+        <h3>Trong GTM — bật Preview (Tag Assistant)</h3>
+        <p>Chưa cần tạo tag nào. Giữ <code>npm run dev</code> đang chạy, rồi:</p>
+        <ol>
+          <li>
+            Ở tab <b>Workspace</b>, bấm <b>Preview</b> (góc trên bên phải). Một tab mới mở trang <code>tagassistant.google.com</code>.
+          </li>
+          <li>
+            Trong tab đó, tuỳ giao diện bạn thấy:
+            <ul>
+              <li>
+                Có hộp <b>“Connect Tag Assistant to your site”</b> với ô <b>Your website’s URL</b> → nhập{" "}
+                <code>http://localhost:3000</code>.
+              </li>
+              <li>
+                <b>Không có ô nhập</b>, chỉ thấy trang Tag Assistant với nút <b>Add domain</b> → bấm <b>Add domain</b> → nhập{" "}
+                <code>http://localhost:3000</code> (phải có <code>http://</code> ở đầu).
+              </li>
+            </ul>
+          </li>
+          <li>
+            Bấm <b>Connect</b>. Website mở ở cửa sổ/tab mới, góc dưới bên phải hiện <b>“Tag Assistant Connected”</b>.
+          </li>
+          <li>
+            Quay lại tab Tag Assistant → bấm <b>Continue</b> → thấy giao diện debug, cột trái là danh sách event.
+          </li>
+        </ol>
+        <p className="text-sm text-muted">
+          Không kết nối được? (1) Trình duyệt chặn cửa sổ bật lên → cho phép popup cho <code>tagassistant.google.com</code>. (2) Tắt
+          trình chặn quảng cáo cho <code>localhost</code>. (3) Bỏ tick <b>Include debug signal in the URL</b> rồi thử lại. (4) Kiểm tra
+          thanh đen trên cùng website đã báo “● đã load” — Tag Assistant chỉ kết nối được khi trang có đúng container GTM. Nên cài thêm
+          tiện ích Chrome <b>Tag Assistant</b> để website mở trong tab thay vì cửa sổ riêng.
         </p>
         <Check
           items={[
@@ -273,16 +405,101 @@ export default function GuidePage() {
       </Lesson>
 
       <Lesson id="bai-2">
+        <p>
+          Bài này không viết code. Bạn tạo nơi nhận dữ liệu (GA4), rồi dùng GTM gắn <b>Google Tag</b> — tag “nền” của GA4, tự gửi{" "}
+          <code>page_view</code> mỗi lần xem trang.
+        </p>
+
+        <h3>1. Tạo GA4 (tài khoản → property → data stream)</h3>
+        <p>
+          Cấu trúc của GA4: <b>Account</b> (thường là 1 công ty) → <b>Property</b> (1 website/app, nơi chứa báo cáo) →{" "}
+          <b>Data stream</b> (nguồn gửi dữ liệu: Web, iOS, Android). Lần đầu dùng GA4 thì <b>phải tạo Account</b>; lần sau chỉ cần
+          tạo thêm Property trong Account cũ.
+        </p>
         <ol>
-          <li>Vào analytics.google.com → tạo <b>property mới để học</b> → Data stream <b>Web</b> → lấy Measurement ID <code>G-XXXXXXX</code>.</li>
-          <li>Trong Data stream, kiểm tra <b>Enhanced measurement</b> đang bật mục “Page changes based on browser history events” — cần cho website kiểu Next.js (chuyển trang không reload).</li>
-          <li>GTM → Tags → New → <b>Google Tag</b> → Tag ID = <code>G-XXXXXXX</code> → Trigger <b>Initialization - All Pages</b> → Save.</li>
-          <li>Bấm Preview lại, đi qua vài trang.</li>
+          <li>
+            Vào <code>analytics.google.com</code> → <b>Bắt đầu đo lường</b> (hoặc Admin → <b>Tạo</b> → Tài khoản). Màn hình “Tạo tài
+            khoản” có 5 bước:
+            <ol>
+              <li><b>Tạo tài khoản</b>: tên tuỳ ý, vd. <code>Hoc GTM</code>. Các ô chia sẻ dữ liệu để mặc định cũng được.</li>
+              <li>
+                <b>Tạo thuộc tính</b> (property): tên vd. <code>Nha Moc – lab</code>, múi giờ <b>Việt Nam</b>, đơn vị tiền{" "}
+                <b>Đồng Việt Nam (VND)</b>. Tiền tệ đặt sai thì báo cáo doanh thu sẽ quy đổi sai.
+              </li>
+              <li><b>Thông tin doanh nghiệp</b>: ngành nghề và quy mô, chọn gì cũng được.</li>
+              <li><b>Mục tiêu kinh doanh</b>: chọn “Tăng doanh số bán hàng trực tuyến” (để GA4 hiện sẵn các báo cáo ecommerce).</li>
+              <li>
+                <b>Thu thập dữ liệu</b>: chọn nền tảng <b>Web</b> → URL <code>localhost:3000</code> (sau này đổi thành tên miền thật
+                cũng được), tên luồng vd. <code>Web lab</code> → <b>Tạo luồng</b>.
+              </li>
+            </ol>
+          </li>
+          <li>
+            Màn hình chi tiết luồng hiện ra. Ghi lại <b>Measurement ID</b> dạng <code>G-XXXXXXXXXX</code> (góc trên bên phải). Phần
+            “Hướng dẫn cài đặt” GA4 đưa ra thì <b>bỏ qua</b> — mình cài qua GTM.
+            <br />
+            <span className="text-sm text-muted">
+              GA4 bây giờ có thể đưa một mã <code>gtm.js?id=GTM-…</code> với ID <b>khác</b> container của bạn: đó là container Google
+              tự tạo để lưu cài đặt của Google Tag (Tag Assistant ghi “Container IDs: GTM-…, G-…”). <b>Không dán</b> mã đó vào website
+              (sẽ thành 2 container), nhưng cũng <b>đừng xoá</b> container đó.
+            </span>
+          </li>
+          <li>
+            Ngay trong màn hình đó, mục <b>Enhanced measurement</b> (Đo lường nâng cao) phải đang bật. Bấm ⚙ → kiểm tra{" "}
+            <b>Page views</b> → “Page changes based on browser history events” đang bật. Next.js chuyển trang không tải lại, thiếu mục
+            này thì chỉ có page_view ở trang đầu tiên.
+          </li>
         </ol>
+
+        <h3>2. Trong GTM — tạo Google Tag</h3>
+        <ol>
+          <li>
+            Tags → <b>New</b> → đặt tên <code>GA4 - Google Tag</code>.
+          </li>
+          <li>
+            Tag Configuration → <b>Google Tag</b> → Tag ID = Measurement ID ở trên (<code>G-XXXXXXXXXX</code>).
+          </li>
+          <li>
+            Triggering → <b>Initialization - All Pages</b> → <b>Save</b>.
+          </li>
+          <li>
+            Bấm <b>Preview</b> lại (mỗi lần sửa trong GTM đều phải Preview lại thì Tag Assistant mới thấy bản mới). Đi qua vài trang
+            của website.
+          </li>
+        </ol>
+        <p className="text-sm text-muted">
+          Đặt tên theo quy ước <code>Loại - Chi tiết</code> ngay từ đầu: tag <code>GA4 - …</code>, trigger <code>CE - …</code> (Custom
+          Event), biến <code>DLV - …</code> (Data Layer Variable). Container sau này có hàng chục tag, tên rõ ràng giúp tìm nhanh.
+        </p>
+
+        <h3>3. Đọc Tag Assistant cho đúng</h3>
+        <ul>
+          <li>
+            Cột trái bấm mốc <b>Initialization</b> → <code>GA4 - Google Tag</code> nằm ở <b>Tags Fired</b>. Đúng.
+          </li>
+          <li>
+            Bấm các mốc <b>History</b> (sinh ra khi bạn chuyển trang) → Google Tag nằm ở <b>Tags Not Fired</b>. <b>Cũng đúng</b>: Google
+            Tag chỉ chạy 1 lần mỗi lần tải trang; page_view khi chuyển trang do chính GA4 tự gửi nhờ Enhanced measurement.
+          </li>
+          <li>
+            Ngoài tag của bạn, Tags Fired có thể có thêm ô <b>Google Analytics G-…</b> (fired 1 time). Đó không phải tag trùng: đó là
+            phần “đích” GA4 do Google Tag tải về cùng các cài đặt của nó (Enhanced measurement…).
+          </li>
+          <li>
+            Muốn xem GA4 đã <b>gửi</b> gì: bấm <b>Summary</b> (hoặc một mốc) → tab <b>Hits Sent</b>, liệt kê từng hit (vd.{" "}
+            <code>Page View</code>, <code>Scroll</code>). Hàng chip trên cùng có chip <code>GTM-…</code> và chip <code>G-…</code>; hit
+            nằm ở chip của <b>container đã gửi nó</b> — tuỳ loại Google Tag mà là chip GTM hoặc chip G-. Chip này trống thì xem chip
+            kia.
+          </li>
+          <li>
+            GA4 gom nhiều event vào một lần gửi, nên hit có thể nằm ở mốc <b>sau</b> mốc event. Xem ở <b>Summary</b> là chắc nhất.
+          </li>
+        </ul>
         <Check
           items={[
-            "Trong Tag Assistant, Google Tag nằm ở mục Tags Fired.",
-            "GA4 → Admin → DebugView thấy page_view mỗi khi bạn chuyển trang.",
+            "Tag Assistant: mốc Initialization có GA4 - Google Tag ở Tags Fired.",
+            "Summary → Hits Sent thấy Page View, mỗi lần tải/chuyển trang có thêm một Page View (không phải 2).",
+            "GA4 → Báo cáo → Thời gian thực (Realtime) hoặc Admin → DebugView thấy page_view.",
           ]}
         />
       </Lesson>
@@ -298,30 +515,382 @@ export default function GuidePage() {
           <li><code>{"{ ecommerce: null }"}</code>: dataLayer <i>gộp</i> dữ liệu giữa các lần push; xoá trước để items cũ không bị dính sang.</li>
           <li><code>value</code> và <code>price</code> là số; <code>currency</code> bắt buộc khi có value.</li>
         </ul>
-        <h3>Trong GTM</h3>
+        <Warn title="Tên nào được đổi, tên nào không">
+          <p>
+            <code>event: &quot;add_to_cart&quot;</code>, <code>ecommerce</code>, <code>currency</code>, <code>value</code>,{" "}
+            <code>items</code>, <code>item_id</code>… là <b>tên chuẩn của GA4</b> — giữ đúng từng chữ, GA4 mới tự làm báo cáo phễu và
+            doanh thu. Dữ liệu riêng của bạn (vd. <code>page_type</code>) thì tự đặt tên. Tên biến trong GTM (
+            <code>DLV - …</code>) đặt gì cũng được, miễn đường dẫn khớp code.
+          </p>
+          <p className="mt-1">
+            Danh sách đầy đủ:{" "}
+            <Link href="/lab/glossary#ten-chuan-ecommerce" className="text-accent underline">
+              Từ điển → Tên event chuẩn
+            </Link>
+            ,{" "}
+            <Link href="/lab/glossary#ten-chuan-item" className="text-accent underline">
+              tham số sản phẩm
+            </Link>{" "}
+            và{" "}
+            <Link href="/lab/glossary#ten-chuan-quy-tac" className="text-accent underline">
+              quy tắc đặt tên
+            </Link>
+            .
+          </p>
+        </Warn>
+        <p>
+          Lưu file → mở một sản phẩm → bấm <b>Thêm vào giỏ</b> → mở nút <b>dataLayer</b> góc phải: phải thấy <code>add_to_cart</code>{" "}
+          (màu xanh), bấm vào xem đủ dữ liệu, không có ⚠. Chưa đúng ở bước này thì đừng sang GTM.
+        </p>
+
+        <h3>Trong GTM — Variable, Trigger, Tag</h3>
+        <p>
+          Ba khối luôn đi cùng nhau: <b>Trigger</b> = <i>khi nào</i> chạy, <b>Variable</b> = <i>lấy giá trị gì</i>, <b>Tag</b> ={" "}
+          <i>gửi đi đâu</i>.
+        </p>
         <ol>
           <li>
-            Variables → User-Defined → New → <b>Data Layer Variable</b>, tên <code>DLV - ecommerce.value</code>, Data Layer Variable
-            Name: <code>ecommerce.value</code>.
+            <b>Variable</b> — Variables → User-Defined Variables → <b>New</b> → tên <code>DLV - ecommerce.value</code> → loại{" "}
+            <b>Data Layer Variable</b> → Data Layer Variable Name: <code>ecommerce.value</code> (dấu chấm = đi vào object con) → Data
+            Layer Version: <b>Version 2</b> → Save. Bài này biến chỉ để <i>xem</i> trong Preview; Bài 6 sẽ dùng nó cho Google Ads.
           </li>
-          <li>Triggers → New → <b>Custom Event</b>, Event name: <code>add_to_cart</code>.</li>
           <li>
-            Tags → New → <b>Google Analytics: GA4 Event</b> → Measurement ID <code>G-XXXXXXX</code> → Event Name{" "}
-            <code>add_to_cart</code> → More Settings → Ecommerce → tick <b>Send Ecommerce data</b> (Data Layer) → Trigger vừa tạo.
+            <b>Trigger</b> — Triggers → <b>New</b> → tên <code>CE - add_to_cart</code> → loại <b>Custom Event</b> → Event name:{" "}
+            <code>add_to_cart</code> (phân biệt hoa thường, phải giống hệt chữ trong code) → This trigger fires on:{" "}
+            <b>All Custom Events</b> → Save.
+          </li>
+          <li>
+            <b>Tag</b> — Tags → <b>New</b> → tên <code>GA4 - Event - add_to_cart</code> → loại <b>Google Analytics: GA4 Event</b>:
+            <ul>
+              <li>
+                Measurement ID: nhập <code>G-XXXXXXXXXX</code>. Thấy dòng ✅ <b>“Google tag found in this container”</b> là đúng — tag
+                này dùng chung cấu hình với <code>GA4 - Google Tag</code> của Bài 2.
+              </li>
+              <li>Event Name: <code>add_to_cart</code>.</li>
+              <li>
+                More Settings → <b>Ecommerce</b> → tick <b>Send Ecommerce data</b>, Data source: <b>Data Layer</b>. GA4 tự đọc{" "}
+                <code>ecommerce.items</code>, <code>value</code>, <code>currency</code> — không cần tạo biến cho từng trường.
+              </li>
+              <li>
+                Triggering → chọn <b>chỉ</b> <code>CE - add_to_cart</code> → Save.
+              </li>
+            </ul>
+          </li>
+          <li>
+            Bấm <b>Preview</b> lại → trên website bấm <b>Thêm vào giỏ</b>.
+          </li>
+        </ol>
+
+        <Warn title="Tag event chỉ được có MỘT trigger — trigger của chính nó">
+          <p>
+            Nếu phần Triggering hiện <code>CE - add_to_cart</code> <b>OR</b> <code>Initialization - All Pages</code>, tag sẽ chạy khi{" "}
+            <i>một trong hai</i> xảy ra → mỗi lần tải bất kỳ trang nào GA4 nhận một <code>add_to_cart</code> giả, không có sản phẩm.
+            Báo cáo “Thêm vào giỏ” và tỷ lệ chuyển đổi sai hết. Bấm dấu <b>⊖</b> bên phải dòng thừa để bỏ.
+          </p>
+          <p className="mt-1">
+            Nguyên tắc: <b>Google Tag</b> → <code>Initialization - All Pages</code>. <b>Tag GA4 Event</b> → chỉ trigger của đúng event
+            đó.
+          </p>
+        </Warn>
+
+        <h3>Kiểm tra trong Tag Assistant</h3>
+        <ol>
+          <li>
+            Bấm mốc <b>Initialization</b> → <code>GA4 - Event - add_to_cart</code> phải ở <b>Tags Not Fired</b>. (Nếu nó ở Tags Fired →
+            bạn còn trigger thừa, xem khung ⚠ ở trên.)
+          </li>
+          <li>
+            Bấm mốc <b>add_to_cart</b> → tag đó ở <b>Tags Fired</b>.
+          </li>
+          <li>
+            Vẫn ở mốc đó, tab <b>Variables</b> → <code>DLV - ecommerce.value</code> có giá trị là <b>số</b> (vd. <code>18900000</code>
+            ), không phải <code>undefined</code>. Tab <b>Data Layer</b> thấy nguyên object bạn đã push.
+          </li>
+          <li>
+            Bấm <b>Summary</b> → tab <b>Hits Sent</b>: bấm “Thêm vào giỏ” bao nhiêu lần thì có bấy nhiêu ô <b>Add to Cart</b>. Không thấy
+            thì đổi sang chip còn lại (GTM ↔ G-).
           </li>
         </ol>
         <Check
           items={[
-            "Bấm “Thêm vào giỏ” → nút dataLayer hiện add_to_cart, không có ⚠.",
-            "Tag Assistant: chọn event add_to_cart → tab Variables thấy DLV - ecommerce.value đúng số tiền; tag GA4 Event đã fire.",
-            "GA4 DebugView thấy add_to_cart, mở ra có items.",
+            "Nút dataLayer hiện add_to_cart, không có ⚠.",
+            "Tag Assistant: tag GA4 Event KHÔNG fire ở Initialization, CHỈ fire ở add_to_cart.",
+            "Tab Variables: DLV - ecommerce.value đúng số tiền.",
+            "Summary → Hits Sent: số ô Add to Cart = số lần bấm.",
+            "GA4 → Admin → DebugView thấy add_to_cart, bấm vào → mục Items có sản phẩm.",
+          ]}
+        />
+
+        <h3>Lỗi hay gặp</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Hiện tượng</th>
+              <th>Nguyên nhân / cách sửa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Có mốc add_to_cart nhưng tag ở Not Fired</td>
+              <td>Tên event trong trigger khác trong code (hoa/thường, gạch dưới, dấu cách thừa). Hoặc quên Preview lại sau khi Save.</td>
+            </tr>
+            <tr>
+              <td>Không có mốc add_to_cart trong Tag Assistant</td>
+              <td>Code chưa chạy: xem nút dataLayer trước. Hoặc trang web đang mở không phải trang Tag Assistant kết nối (tab cũ).</td>
+            </tr>
+            <tr>
+              <td>DLV - ecommerce.value = undefined</td>
+              <td>Gõ sai tên biến (<code>ecommerce.value</code>), hoặc chọn Data Layer Version 1.</td>
+            </tr>
+            <tr>
+              <td>add_to_cart xuất hiện ở mọi trang</td>
+              <td>Tag có thêm trigger <code>Initialization - All Pages</code>.</td>
+            </tr>
+            <tr>
+              <td>DebugView trống</td>
+              <td>Đợi 10–30 giây; chọn đúng thiết bị ở ô “Debug device”. Hits Sent có hit là dữ liệu đã đi.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Tự kiểm tra hiểu bài</h3>
+        <ul>
+          <li>Đổi code thành <code>event: &quot;Add_To_Cart&quot;</code> → tag có fire không? Vì sao?</li>
+          <li>
+            Bỏ dòng <code>{"{ ecommerce: null }"}</code>, thêm 2 sản phẩm khác nhau liên tiếp → xem tab Data Layer ở lần thứ 2, có gì
+            lạ?
+          </li>
+          <li>
+            Đổi <code>value</code> thành chuỗi <code>&quot;18.900.000 ₫&quot;</code> → nút dataLayer báo gì? GA4 sẽ ghi doanh thu bao
+            nhiêu?
+          </li>
+        </ul>
+        <p className="mt-6 text-sm text-muted">
+          Muốn hiểu kỹ Variables (các loại biến, lấy giá trị trong mảng <code>items</code>, dùng biến trong trigger)? Xem{" "}
+          <a href="#bai-3b" className="text-accent underline">Bài 3.5</a> trước khi sang Bài 4.
+        </p>
+      </Lesson>
+
+      <Lesson id="bai-3b">
+        <p>
+          <b>Variable</b> (biến) là “ô chứa giá trị” mà GTM tính lại <b>ở mỗi event</b>: giá trị đơn hàng, URL trang, mã gclid, tên
+          event… Tag và trigger không tự biết những giá trị này — chúng hỏi biến.
+        </p>
+
+        <h3>1. Biến được dùng ở 3 chỗ</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Chỗ dùng</th>
+              <th>Ví dụ trong project</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Trong ô cấu hình của Tag</b></td>
+              <td>
+                Tag Google Ads Conversion: Conversion Value = <code>{"{{DLV - ecommerce.value}}"}</code>. Tag GA4 Event: Event Name ={" "}
+                <code>{"{{Event}}"}</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><b>Trong điều kiện của Trigger</b></td>
+              <td>
+                Chỉ fire khi <code>{"{{DLV - ecommerce.value}}"}</code> <i>greater than</i> <code>10000000</code> (giỏ hàng giá trị
+                cao).
+              </td>
+            </tr>
+            <tr>
+              <td><b>Làm đầu vào cho biến khác</b></td>
+              <td>
+                Lookup Table lấy <code>{"{{Page Hostname}}"}</code> để biết đang ở localhost hay tên miền thật.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Cú pháp: tên biến nằm trong 2 cặp ngoặc nhọn <code>{"{{Tên biến}}"}</code>. Không cần gõ tay: bấm biểu tượng{" "}
+          <b>➕ (hình viên gạch)</b> cạnh ô nhập → chọn biến trong danh sách. Tên biến phân biệt hoa thường.
+        </p>
+
+        <h3>2. Biến có sẵn (Built-In Variables)</h3>
+        <p>
+          Variables → <b>Built-In Variables</b> → <b>Configure</b> → tick để bật. Một số biến mặc định đã bật sẵn; nhóm Click và Form
+          phải tự bật.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Biến</th>
+              <th>Giá trị ví dụ</th>
+              <th>Dùng để</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Event</code></td>
+              <td><code>add_to_cart</code></td>
+              <td>Event Name động cho 1 tag GA4 chung (Bài 4)</td>
+            </tr>
+            <tr>
+              <td><code>Page Path</code></td>
+              <td><code>/products/sofa-…</code></td>
+              <td>Trigger chỉ chạy ở một nhóm trang, vd. Page Path <i>starts with</i> <code>/checkout</code></td>
+            </tr>
+            <tr>
+              <td><code>Page Hostname</code></td>
+              <td><code>localhost</code></td>
+              <td>Tách môi trường học và tên miền thật</td>
+            </tr>
+            <tr>
+              <td><code>Page URL</code>, <code>Referrer</code></td>
+              <td><code>http://localhost:3000/cart</code></td>
+              <td>Điều kiện trigger, gỡ lỗi</td>
+            </tr>
+            <tr>
+              <td><code>Click Text</code>, <code>Click URL</code></td>
+              <td><code>Thêm vào giỏ</code></td>
+              <td>Trigger kiểu Click (đo nút bấm không có dataLayer.push)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>3. Biến tự tạo (User-Defined) — các loại hay dùng</h3>
+        <p>Variables → User-Defined Variables → <b>New</b> → đặt tên → bấm vùng Variable Configuration → chọn loại.</p>
+
+        <h4 className="mt-4 font-semibold">a. Data Layer Variable — dùng nhiều nhất</h4>
+        <p>
+          Đọc giá trị bạn đã push vào dataLayer. Luôn chọn <b>Version 2</b>. Dấu chấm để đi vào object con; vào phần tử mảng thì dùng{" "}
+          <b>dấu chấm + số thứ tự</b> (bắt đầu từ 0), <b>không</b> viết <code>[0]</code>:
+        </p>
+        <pre>{`{ event: "add_to_cart",
+  ecommerce: {
+    currency: "VND",                 ← ecommerce.currency
+    value: 18900000,                 ← ecommerce.value
+    items: [                         ← ecommerce.items   (cả mảng)
+      { item_id: "SKU-SOFA-001",          ← ecommerce.items.0.item_id
+        item_variant: "Xám tro" }    ← ecommerce.items.0.item_variant
+    ] } }`}</pre>
+        <p>Bộ biến nên tạo cho cả khoá học:</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Tên biến</th>
+              <th>Data Layer Variable Name</th>
+              <th>Dùng ở</th>
+            </tr>
+          </thead>
+          <tbody>
+            {DLV_SET.map(([name, path, use]) => (
+              <tr key={name}>
+                <td><code>{name}</code></td>
+                <td><code className="break-all">{path}</code></td>
+                <td className="text-sm">{use}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <Warn title="items.0 chỉ đọc sản phẩm ĐẦU TIÊN">
+          <p>
+            Ổn với add_to_cart ở trang sản phẩm (chỉ 1 item). Với <code>view_cart</code>, <code>begin_checkout</code>,{" "}
+            <code>purchase</code> nhiều sản phẩm thì biến bỏ sót phần còn lại — để GA4 tự đọc cả mảng qua <b>Send Ecommerce data</b>.
+          </p>
+        </Warn>
+
+        <h4 className="mt-4 font-semibold">b. Constant — giá trị cố định, sửa 1 chỗ</h4>
+        <p>
+          Tên <code>CONST - GA4 ID</code>, Value = <code>G-XXXXXXXXXX</code>. Sau đó trong <code>GA4 - Google Tag</code> (Tag ID) và
+          các tag GA4 Event (Measurement ID) điền <code>{"{{CONST - GA4 ID}}"}</code> thay vì gõ ID. Đổi property chỉ cần sửa biến
+          này. Tương tự cho Google Ads: <code>CONST - Ads Conversion ID</code>.
+        </p>
+
+        <h4 className="mt-4 font-semibold">c. URL — đọc tham số trên đường dẫn</h4>
+        <p>
+          Tên <code>URL - gclid</code>, Component Type: <b>Query</b>, Query Key: <code>gclid</code>. Tạo thêm{" "}
+          <code>URL - utm_source</code>, <code>URL - utm_campaign</code> cùng cách. Thử: vào{" "}
+          <Link href="/lab/ads" className="text-accent underline">Mô phỏng click Ads</Link>, click quảng cáo → mốc đầu tiên trong
+          Tag Assistant, tab Variables thấy gclid và utm.
+        </p>
+
+        <h4 className="mt-4 font-semibold">d. 1st-Party Cookie — đọc cookie</h4>
+        <p>
+          Tên <code>COOKIE - _gcl_aw</code>, Cookie Name: <code>_gcl_aw</code>. Dùng ở Bài 6 để kiểm tra Conversion Linker đã lưu mã
+          click hay chưa (có giá trị dạng <code>GCL.1700000000.abc…</code>).
+        </p>
+
+        <h4 className="mt-4 font-semibold">e. Lookup Table — “nếu A thì B”</h4>
+        <p>
+          Tên <code>LT - Môi trường</code>, Input Variable: <code>{"{{Page Hostname}}"}</code>, thêm dòng: <code>localhost</code> →{" "}
+          <code>dev</code>. Tick <b>Set Default Value</b> → <code>prod</code>.
+        </p>
+        <p>
+          Dùng: trigger của tag Google Ads Conversion thêm điều kiện <code>{"{{LT - Môi trường}}"}</code> <i>equals</i>{" "}
+          <code>prod</code> → đặt hàng thử trên localhost không làm bẩn số liệu chuyển đổi thật. (Regex Table giống hệt nhưng cột
+          Input là biểu thức regex.)
+        </p>
+
+        <h4 className="mt-4 font-semibold">f. Custom JavaScript — tự tính giá trị</h4>
+        <p>Khi không có sẵn giá trị cần dùng. Phải là <b>một hàm không tên, có return</b>, không được thay đổi trang:</p>
+        <Code>{CJS_QTY}</Code>
+        <p className="text-sm text-muted">
+          Biến Custom JS có thể gọi biến khác bằng <code>{"{{…}}"}</code>. Chỉ dùng khi thật cần — logic để trong code website (khi
+          push dataLayer) dễ kiểm soát hơn.
+        </p>
+
+        <h3>4. Ví dụ đầy đủ: trigger “giỏ hàng giá trị cao”</h3>
+        <ol>
+          <li>
+            Triggers → New → tên <code>CE - add_to_cart - high value</code> → Custom Event, Event name <code>add_to_cart</code>.
+          </li>
+          <li>
+            This trigger fires on: <b>Some Custom Events</b> → <code>DLV - ecommerce.value</code> <b>greater than</b>{" "}
+            <code>10000000</code> → Save.
+          </li>
+          <li>
+            Gắn cho một tag mới, vd. GA4 Event tên <code>high_value_add_to_cart</code> (dùng tạo đối tượng remarketing sau này).
+          </li>
+          <li>Preview: thêm Đèn sàn (4,25 triệu) → tag Not Fired; thêm Sofa (18,9 triệu) → Fired.</li>
+        </ol>
+
+        <h3>5. Gỡ lỗi biến trong Tag Assistant</h3>
+        <ul>
+          <li>
+            Bấm từng mốc ở cột trái → tab <b>Variables</b>: biến được tính <b>tại thời điểm event đó</b>. Ở mốc Initialization,{" "}
+            <code>DLV - ecommerce.value</code> là <code>undefined</code> là đúng — chưa ai push.
+          </li>
+          <li>Tab <b>Data Layer</b> cho thấy dữ liệu thật tại mốc đó — so với tên biến xem có gõ sai đường dẫn không.</li>
+        </ul>
+        <table>
+          <thead>
+            <tr>
+              <th>Biến ra undefined vì…</th>
+              <th>Sửa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Gõ sai đường dẫn / hoa thường</td><td>Copy đúng tên trường từ tab Data Layer.</td></tr>
+            <tr><td>Viết <code>items[0]</code></td><td>Đổi thành <code>items.0</code>.</td></tr>
+            <tr><td>Chọn Data Layer Version 1</td><td>Chọn Version 2.</td></tr>
+            <tr><td>Đang xem sai mốc</td><td>Chọn đúng mốc event đã push giá trị đó.</td></tr>
+            <tr><td>Custom JS không có <code>return</code></td><td>Thêm return; kiểm tra lỗi cú pháp (GTM báo khi Save).</td></tr>
+          </tbody>
+        </table>
+        <Check
+          items={[
+            "Đã tạo bộ Data Layer Variable trong bảng ở mục 3a.",
+            "Bấm Thêm vào giỏ → tab Variables thấy value, currency, item_id, item_variant đúng; đổi phiên bản thì item_variant đổi theo.",
+            "Click quảng cáo giả ở /lab/ads → URL - gclid có giá trị.",
+            "Trigger “high value” chỉ fire với sản phẩm trên 10 triệu.",
           ]}
         />
       </Lesson>
 
       <Lesson id="bai-4">
-        <p>Lặp lại Bài 3 cho cả phễu. Nên tạo helper trước để code ngắn gọn:</p>
-        <Code>{B4_HELPER}</Code>
+        <p>
+          Mục tiêu: đo đủ <b>9 event</b> từ trang chủ tới nút Đặt hàng, nhưng trong GTM chỉ dùng <b>1 trigger + 1 tag</b>. Mẹo học: đọc
+          gợi ý ở mỗi <code>TODO Bài 4</code> và <b>tự viết trước</b>, rồi mới so với code mẫu bên dưới.
+        </p>
+        <p>Toàn cảnh — 8 chỗ cần viết:</p>
         <table>
           <thead>
             <tr>
@@ -344,16 +913,128 @@ export default function GuidePage() {
           <code>useTrackOnce</code> đã được viết sẵn: đoạn code bên trong chỉ chạy 1 lần. (Ở chế độ dev, React cố ý chạy effect 2 lần
           — nếu push trực tiếp trong <code>useEffect</code> bạn sẽ thấy event bị trùng.)
         </p>
-        <h3>Trong GTM — gom tất cả vào 1 tag</h3>
+
+        <h3>Bước 1 — Tạo helper cho gọn</h3>
+        <p>
+          Bài 3 tốn khoảng 20 dòng cho 1 event; 9 event thì quá dài. Gom phần lặp lại vào 2 hàm: <code>toItem</code> đổi sản phẩm thành
+          item chuẩn GA4, <code>pushEcommerce</code> lo phần reset + push + <code>currency</code>.
+        </p>
+        <Code>{B4_HELPER}</Code>
+        <p>Mỗi file dùng helper thêm dòng import ở đầu file:</p>
+        <Code>{B4_IMPORT}</Code>
+
+        <h3>Bước 2 — Điền 8 chỗ TODO Bài 4</h3>
+        <p>
+          Tìm bằng <code>Cmd+Shift+F</code> → <code>TODO Bài 4</code>.
+        </p>
+        <Code>{B4_GRID}</Code>
+        <p className="text-sm text-muted">
+          <code>index</code> = vị trí sản phẩm trong danh sách (0, 1, 2…) → biết vị trí nào được click nhiều.{" "}
+          <code>{"{ ...toItem(p), index }"}</code> = lấy hết trường của <code>toItem</code> rồi thêm <code>index</code>.
+        </p>
+        <Code>{B4_DETAIL}</Code>
+        <Code>{B4_CART}</Code>
+        <p className="text-sm text-muted">
+          Ở trang giỏ, <code>value</code> và <code>quantity</code> là <b>phần thay đổi</b> (<code>n</code>), không phải tổng cả giỏ.
+        </p>
+        <Code>{B4_CHECKOUT}</Code>
+        <p className="text-sm text-muted">
+          <code>coupon || undefined</code>: không có mã giảm giá thì bỏ hẳn trường, thay vì gửi chuỗi rỗng. <code>value</code> lấy từ{" "}
+          <code>computeTotals</code> — đã trừ giảm giá, <b>không gồm ship</b>, đúng chuẩn GA4.
+        </p>
+
+        <h3>Bước 3 — Trong GTM: sửa trigger &amp; tag của Bài 3 (không tạo mới)</h3>
+        <p>
+          Không tạo 9 tag cho 9 event. Sửa lại đúng trigger và tag của Bài 3 để <b>một</b> tag gửi được mọi event ecommerce.
+        </p>
         <ol>
           <li>
-            Sửa trigger thành Event name:{" "}
-            <code>^(view_item_list|select_item|view_item|add_to_cart|remove_from_cart|view_cart|begin_checkout|add_shipping_info|add_payment_info)$</code>{" "}
-            và tick <b>Use regex matching</b>.
+            Mở trigger <code>CE - add_to_cart</code> → đổi tên thành <code>CE - ecommerce</code> → Event name:
+            <Code>{B4_REGEX}</Code>→ tick <b>Use regex matching</b> → Save. (<code>^</code> và <code>$</code> bắt khớp nguyên tên, tránh
+            khớp nhầm event như <code>view_item_list_old</code>; <code>|</code> nghĩa là “hoặc”.)
           </li>
-          <li>Trong tag GA4 Event, đổi Event Name thành <code>{"{{Event}}"}</code> (biến có sẵn — bật ở Variables → Configure).</li>
+          <li>
+            Mở tag <code>GA4 - Event - add_to_cart</code> → đổi tên thành <code>GA4 - Event - ecommerce</code> → Event Name: bấm biểu
+            tượng viên gạch ➕ bên cạnh ô → chọn <code>{"{{Event}}"}</code> (biến có sẵn, chứa tên event vừa push → một tag gửi đúng
+            tên cho cả 9 event). Không thấy biến này thì vào Variables → Built-In Variables → <b>Configure</b> → tick <b>Event</b>.
+          </li>
+          <li>
+            Measurement ID giữ <code>{"{{CONST - GA4 ID}}"}</code>, <b>Send Ecommerce data</b> vẫn bật. Trigger của tag chỉ một:{" "}
+            <code>CE - ecommerce</code>. Save → <b>Preview</b> lại.
+          </li>
         </ol>
-        <Check items={["Đi một vòng từ trang chủ tới nút Đặt hàng: đủ 9 event, không event nào bị trùng, không có ⚠."]} />
+
+        <h3>Bước 4 — Đi một vòng phễu &amp; đối chiếu</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Bạn làm</th>
+              <th>Event phải thấy (nút dataLayer &amp; Tag Assistant)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {WALK.map(([act, ev]) => (
+              <tr key={act}>
+                <td>{act}</td>
+                <td className="font-mono text-xs">{ev}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <Check
+          items={[
+            "Nút dataLayer: đủ các event trong bảng, không có ⚠, không event nào bị trùng.",
+            "Tag Assistant: ở mỗi mốc ecommerce, GA4 - Event - ecommerce nằm ở Tags Fired.",
+            "Summary → Hits Sent: các ô mang đúng tên event (View Item, Begin Checkout…), không phải 9 ô cùng một tên.",
+            "Bấm một mốc → tab Variables → Event = đúng tên event của mốc đó.",
+          ]}
+        />
+
+        <h3>Lỗi hay gặp</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Hiện tượng</th>
+              <th>Nguyên nhân / cách sửa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Lỗi đỏ <code>Cannot find name &apos;pushEcommerce&apos;</code></td>
+              <td>Quên dòng import ở đầu file.</td>
+            </tr>
+            <tr>
+              <td>Có event trong dataLayer nhưng tag Not Fired</td>
+              <td>Event chưa có trong regex của trigger, hoặc quên tick Use regex matching, hoặc chưa Preview lại.</td>
+            </tr>
+            <tr>
+              <td>Mọi hit trong Hits Sent đều tên add_to_cart</td>
+              <td>Event Name của tag vẫn gõ cứng <code>add_to_cart</code> → đổi thành <code>{"{{Event}}"}</code>.</td>
+            </tr>
+            <tr>
+              <td>view_item / view_cart xuất hiện 2 lần</td>
+              <td>Push trong <code>useEffect</code> thường thay vì trong <code>useTrackOnce</code>.</td>
+            </tr>
+            <tr>
+              <td>view_cart không xuất hiện</td>
+              <td>Giỏ đang trống — code đã chặn (<code>if (cart.lines.length === 0) return;</code>).</td>
+            </tr>
+            <tr>
+              <td>select_item không thấy trong Tag Assistant</td>
+              <td>Click bằng chuột giữa / mở tab mới → trang mới có dataLayer mới. Click chuột trái bình thường.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Tự kiểm tra hiểu bài</h3>
+        <ul>
+          <li>Vì sao event ở trang giỏ dùng <code>n</code> (phần thay đổi) chứ không dùng tổng số lượng trong giỏ?</li>
+          <li>Bỏ <code>^</code> và <code>$</code> khỏi regex thì điều gì có thể xảy ra?</li>
+          <li>
+            Vì sao <code>view_item_list</code> ở trang sản phẩm có <code>item_list_id</code> khác trang chủ? Báo cáo GA4 dùng nó để làm
+            gì?
+          </li>
+        </ul>
       </Lesson>
 
       <Lesson id="bai-5">
@@ -363,7 +1044,8 @@ export default function GuidePage() {
         </p>
         <Code>{B5_PURCHASE}</Code>
         <p>
-          Trong GTM: tạo thêm 2 Data Layer Variable <code>ecommerce.transaction_id</code>, <code>ecommerce.currency</code> và thêm{" "}
+          Trong GTM: tạo thêm 2 Data Layer Variable <code>ecommerce.transaction_id</code>, <code>ecommerce.currency</code> (xem{" "}
+          <a href="#bai-3b" className="text-accent underline">Bài 3.5</a>) và thêm{" "}
           <code>purchase</code> vào regex của trigger.
         </p>
         <Check

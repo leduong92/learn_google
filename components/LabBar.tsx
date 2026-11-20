@@ -30,6 +30,7 @@ export function LabBar() {
         <span className="font-mono font-semibold tracking-wide text-[#9fd3a7]">GTM / ADS LAB</span>
         <nav className="flex flex-wrap gap-x-4 gap-y-1">
           <Link href="/lab/guide" className="hover:text-white">📘 Bài học</Link>
+          <Link href="/lab/glossary" className="hover:text-white">📖 Từ điển</Link>
           <Link href="/lab/ads" className="hover:text-white">Mô phỏng click Ads</Link>
         </nav>
         <span className="ml-auto font-mono">
