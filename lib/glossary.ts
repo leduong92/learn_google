@@ -314,6 +314,17 @@ export const GLOSSARY: GlossarySection[] = [
         d: "Khi người dùng click. Dùng cùng biến Click Text, Click URL. Đo được mà không cần sửa code, nhưng dễ hỏng khi giao diện đổi.",
       },
       {
+        t: "All Link Clicks / Some Link Clicks",
+        w: "Click trigger → This trigger fires on",
+        d: "All = mọi link trên trang. Some = chỉ link thoả điều kiện (vd. `Click URL` contains …). Gần như luôn chọn Some.",
+        ex: "`Click URL` starts with `tel:` (Bài 11)",
+      },
+      {
+        t: "Wait for Tags / Check Validation",
+        w: "Click - Just Links",
+        d: "Wait for Tags: giữ trang lại tối đa vài giây chờ tag gửi xong rồi mới chuyển trang. Check Validation: chỉ chạy khi link không bị code chặn (preventDefault). Link mở tab mới hoặc `tel:` thì không cần bật.",
+      },
+      {
         t: "Form Submission",
         w: "Trigger type",
         d: "Khi form được gửi. Form React thường chặn gửi mặc định nên trigger này hay không bắt được — dùng dataLayer.push thì chắc hơn.",
@@ -404,6 +415,12 @@ export const GLOSSARY: GlossarySection[] = [
         w: "Variable Type",
         d: "Biến gom email, SĐT, địa chỉ cho Enhanced Conversions. Có 3 cách: Manual (chỉ định biến), Code (đọc object), Automatic (Google tự dò).",
       },
+      {
+        t: "Auto-Event Variable",
+        w: "Variable Type",
+        d: "Đọc thông tin của phần tử vừa được click (hoặc form vừa gửi): Element, Element Classes, Element ID, Element Target, Element Text, Element URL, Element Attribute (thuộc tính bất kỳ, cần Attribute name).",
+        ex: "`AEV - store_id`: Element Attribute `data-store-id` (Bài 11)",
+      },
     ],
   },
   {
@@ -424,7 +441,13 @@ export const GLOSSARY: GlossarySection[] = [
       {
         t: "Chip GTM-… / chip G-…",
         w: "Thanh trên cùng",
-        d: "Đổi góc nhìn giữa các container trên trang. Mỗi chip có tab Tags, Hits Sent, Variables, Data Layer của riêng nó. Hit GA4 nằm ở chip của container đã gửi nó — chip này trống thì xem chip kia.",
+        d: "Đổi góc nhìn giữa các container trên trang. Mỗi chip có tab Tags, Hits Sent, Variables, Data Layer của riêng nó. Hit GA4 nằm ở chip của container đã gửi nó — chip này trống thì xem chip kia. Google Ads tải qua GTM KHÔNG có chip riêng: chip GTM có thêm biểu tượng chữ A.",
+      },
+      {
+        t: "Destination ID",
+        w: "Chip GTM → Container Details",
+        d: "Các nơi nhận dữ liệu được tải bên trong container này. Thấy `AW-…` là Google tag của Google Ads đang chạy qua GTM.",
+        ex: "`AW-18580180713`",
       },
       {
         t: "Tags (Fired / Not Fired)",
@@ -438,7 +461,8 @@ export const GLOSSARY: GlossarySection[] = [
       {
         t: "Hits Sent",
         w: "Tab, chip GTM hoặc G-…",
-        d: "Các request GA4 đã gửi, bấm vào xem tham số chi tiết. GA4 gom nhiều event vào một lần gửi nên hit có thể nằm ở mốc sau — chọn Summary để thấy hết.",
+        d: "Các request đã gửi đi (GA4, và Google Ads nếu chạy qua GTM), bấm vào xem tham số chi tiết. GA4 gom nhiều event vào một lần gửi nên hit có thể nằm ở mốc sau — chọn Summary để thấy hết. Summary cộng dồn cả phiên: “Fired 2 times” có thể là 2 mốc khác nhau.",
+        ex: "Hit conversion của Ads: `label`, `value`, `currency_code`, `oid` (mã đơn)",
       },
       {
         t: "Tag Assistant Connected",
@@ -714,7 +738,8 @@ export const GLOSSARY: GlossarySection[] = [
       {
         t: "Custom definitions (Định nghĩa tuỳ chỉnh)",
         w: "Admin → Data display",
-        d: "Đăng ký event parameter / user property tự đặt thành dimension hoặc metric để dùng trong báo cáo.",
+        d: "Đăng ký event parameter / user property tự đặt thành dimension hoặc metric để dùng trong báo cáo. Chỉ có dữ liệu từ lúc tạo trở đi.",
+        ex: "Create custom dimension: `Showroom`, Scope Event, parameter `store_id` (Bài 11)",
       },
       {
         t: "DebugView",
@@ -801,6 +826,100 @@ export const GLOSSARY: GlossarySection[] = [
         t: "Bid strategy (Chiến lược giá thầu)",
         w: "Campaign settings",
         d: "Maximize clicks, Maximize conversions, Maximize conversion value, Target CPA, Target ROAS. Các chiến lược theo chuyển đổi chỉ chạy tốt khi tracking đúng và đủ dữ liệu.",
+      },
+      {
+        t: "Remarketing (quảng cáo nhắm lại)",
+        w: "Google Ads",
+        d: "Hiện quảng cáo cho người đã từng vào website, theo hành vi (xem sản phẩm, bỏ giỏ…). Danh sách lấy từ Google tag hoặc Audience của GA4; chỉ gồm người đã đồng ý `ad_personalization`.",
+        ex: "Audience “Bỏ giỏ 14 ngày” (Bài 10)",
+      },
+      {
+        t: "Dynamic remarketing",
+        w: "Google Ads + Merchant Center",
+        d: "Quảng cáo remarketing hiện đúng sản phẩm khách đã xem/bỏ giỏ. Cần danh sách sản phẩm trong Google Merchant Center, `item_id` trong event phải khớp mã sản phẩm trong đó.",
+      },
+      {
+        t: "RLSA (Remarketing lists for search ads)",
+        w: "Chiến dịch Search → Audience segments",
+        d: "Dùng danh sách remarketing trong chiến dịch Search: tăng giá thầu hoặc đổi quảng cáo khi người từng vào web tìm lại trên Google. Cần khoảng 1.000 người dùng hoạt động.",
+      },
+      {
+        t: "Customer Match",
+        w: "Tools → Shared library → Audience manager",
+        d: "Tải danh sách email/SĐT khách hàng (đã đồng ý) lên Google Ads để nhắm quảng cáo. Phải tuân thủ chính sách Customer Match và luật dữ liệu cá nhân.",
+      },
+      {
+        t: "Audience segments: Targeting / Observation",
+        w: "Cài đặt chiến dịch",
+        d: "Targeting = CHỈ hiện quảng cáo cho người trong danh sách. Observation = vẫn hiện cho mọi người, chỉ theo dõi / tăng giá thầu riêng cho danh sách.",
+      },
+      {
+        t: "Google Business Profile",
+        w: "business.google.com",
+        d: "Hồ sơ doanh nghiệp hiện trên Google Search và Maps (tên, địa chỉ, giờ mở cửa, SĐT, ảnh, đánh giá). Phải xác minh; chỉ tạo cho địa điểm có thật. Là nguồn địa chỉ cho quảng cáo Maps.",
+      },
+      {
+        t: "Location manager",
+        w: "Tools → Shared library → Location manager",
+        d: "Nơi liên kết Google Business Profile (Our locations) hoặc chuỗi cửa hàng đại lý (Affiliate locations) vào Google Ads.",
+      },
+      {
+        t: "Location assets (tiện ích vị trí)",
+        w: "Campaigns → Assets",
+        d: "Địa chỉ, khoảng cách, nút chỉ đường gắn vào quảng cáo; lấy từ Business Profile. Là điều kiện để quảng cáo hiện trên Google Maps.",
+      },
+      {
+        t: "Promoted pins · Map search ads · Map suggest ads · Placesheet ads",
+        w: "Google Maps",
+        d: "4 dạng quảng cáo trên Maps: ghim vuông trên bản đồ · đầu danh sách kết quả tìm kiếm · gợi ý khi đang gõ (app) · trong trang chi tiết địa điểm. Không chạy được quảng cáo chỉ trên Maps.",
+        ex: "Bài 11",
+      },
+      {
+        t: "Performance Max for store goals",
+        w: "Loại chiến dịch",
+        d: "Chiến dịch Performance Max nhằm kéo khách đến cửa hàng: tối ưu theo lượt đến cửa hàng và hành động tại chỗ (gọi, chỉ đường). Hiện trên Search, Maps, YouTube, Display, Gmail…",
+      },
+      {
+        t: "Store visits",
+        w: "Goals → Conversions",
+        d: "Lượt khách đến cửa hàng sau khi thấy/bấm quảng cáo, Google ước tính. Google tự bật khi tài khoản đủ điều kiện — không cài bằng GTM.",
+      },
+      {
+        t: "Objective (mục tiêu chiến dịch)",
+        w: "New campaign → Choose an objective",
+        d: "Sales, Leads, Website traffic… Chỉ để Google gợi ý cài đặt phù hợp; điều thật sự quyết định tối ưu là conversion goals của chiến dịch.",
+      },
+      {
+        t: "Networks: Search Partners / Display Network",
+        w: "Search campaign → Campaign settings",
+        d: "Search Partners = các trang tìm kiếm đối tác của Google. Display Network = hiện quảng cáo trên website khác. Chiến dịch Search đầu tiên nên bỏ tick cả hai để số liệu sạch.",
+      },
+      {
+        t: "Location options: Presence / Presence or interest",
+        w: "Campaign settings → Locations",
+        d: "Presence = người đang ở hoặc thường ở vùng nhắm. Presence or interest (mặc định) = cả người ở nơi khác nhưng quan tâm vùng đó. Bán hàng giao trong nước → chọn Presence.",
+      },
+      {
+        t: "AI Max for Search campaigns",
+        w: "Search campaign (bật sẵn)",
+        d: "Lớp tự động hoá của Google: Search term matching (mở rộng từ khoá), Text customization (tự viết tiêu đề/mô tả), Final URL expansion (tự chọn trang đích). Cần giá thầu theo chuyển đổi để chạy tốt.",
+      },
+      {
+        t: "Match types: broad / \"phrase\" / [exact]",
+        w: "Keywords",
+        d: "Broad (mặc định) khớp rộng theo ý nghĩa; phrase khớp khi tìm kiếm chứa ý của cụm từ; exact khớp đúng ý của từ khoá. Thêm dấu - phía trước để thành negative keyword.",
+        ex: "`sofa gỗ` · `\"sofa gỗ\"` · `[sofa gỗ óc chó]`",
+      },
+      {
+        t: "Responsive search ad (RSA)",
+        w: "Ad group → Ads",
+        d: "Quảng cáo Search: tối đa 15 tiêu đề (≤ 30 ký tự) và 4 mô tả (≤ 90 ký tự); Google tự ghép thành nhiều phiên bản. Ad strength chấm độ đầy đủ.",
+      },
+      {
+        t: "Search terms / Negative keywords",
+        w: "Insights and reports → Search terms",
+        d: "Search terms = câu khách thật sự gõ dẫn tới quảng cáo. Từ không liên quan thì thêm vào Negative keywords để không trả tiền cho chúng.",
+        ex: "`sofa cũ`, `thanh lý`",
       },
       {
         t: "Quality Score",
