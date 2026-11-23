@@ -139,6 +139,23 @@ export function bumpStat(
   });
 }
 
+/* ---------------- Tài khoản giả lập (Bài 10) ---------------- */
+
+export type Account = {
+  /** Mã nội bộ — dùng làm user_id cho GA4 (KHÔNG dùng email) */
+  user_id: string;
+  name: string;
+  email: string;
+  method: "email" | "google";
+  newsletter: boolean;
+  created: number;
+};
+
+export const accountStore = createLocalStore<{ account: Account | null; loggedIn: boolean }>("lab_account", {
+  account: null,
+  loggedIn: false,
+});
+
 /* ---------------- Đơn hàng ---------------- */
 
 export type Order = {
@@ -181,6 +198,7 @@ export const LAB_STORAGE_KEYS = [
   "lab_customers",
   "lab_orders",
   "lab_tracked_purchases",
+  "lab_account",
 ];
 
 /** Xoá mọi dữ liệu website lưu trong trình duyệt này. Cookie của Google do Google quản lý. */

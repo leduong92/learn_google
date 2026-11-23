@@ -54,6 +54,22 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 __html: `
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
+
+            // Mặc định: TỪ CHỐI hết, cho tới khi người dùng chọn
+            gtag('consent', 'default', {
+            ad_storage: 'denied',
+            ad_user_data: 'denied',
+            ad_personalization: 'denied',
+            analytics_storage: 'denied',
+            wait_for_update: 500
+            });
+
+            // Người dùng đã chọn ở lần truy cập trước? → áp dụng lại ngay
+            try {
+            var c = JSON.parse(localStorage.getItem('lab_consent_ui') || 'null');
+            if (c && c.decided) gtag('consent', 'update', c.state);
+            } catch (e) {}
+
             gtag('js', new Date());
           `,
               }}

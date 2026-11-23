@@ -23,6 +23,8 @@ export function ConsentBanner() {
     // TODO Bài 7 — báo cho Google biết lựa chọn của người dùng:
     //   gtag('consent', 'update', state)
     //   và (tuỳ chọn) push event "consent_update" để làm trigger cho tag ngoài Google
+    window.gtag?.("consent", "update", state);
+    window.dataLayer?.push({ event: "consent_update" }); // ?. — không lỗi khi chưa nhúng GTM
   }
 
   return (
@@ -34,27 +36,58 @@ export function ConsentBanner() {
       {/* pb/pr chừa chỗ cho nút dataLayer nổi ở góc phải */}
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 pt-4 pb-16 md:flex-row md:items-end md:pr-44 md:pb-4">
         <div className="flex-1">
-          <p className="font-semibold">Bạn có đồng ý cho dùng cookie thống kê &amp; quảng cáo?</p>
+          <p className="font-semibold">
+            Bạn có đồng ý cho dùng cookie thống kê &amp; quảng cáo?
+          </p>
           <p className="mt-1 text-sm text-muted">
-            Nếu đồng ý, Google Analytics và Google Ads (do Google cung cấp, máy chủ đặt ngoài Việt Nam) sẽ ghi nhận lượt xem trang,
-            nguồn quảng cáo và thao tác của bạn để thống kê, đo lường và cá nhân hoá quảng cáo. Từ chối không ảnh hưởng việc dùng
-            website; bạn có thể đổi ý bất kỳ lúc nào ở chân trang. Chi tiết:{" "}
-            <Link href="/privacy" className="underline">Chính sách bảo mật</Link> ·{" "}
-            <Link href="/cookies" className="underline">Chính sách cookie</Link>.
+            Nếu đồng ý, Google Analytics và Google Ads (do Google cung cấp, máy
+            chủ đặt ngoài Việt Nam) sẽ ghi nhận lượt xem trang, nguồn quảng cáo
+            và thao tác của bạn để thống kê, đo lường và cá nhân hoá quảng cáo.
+            Từ chối không ảnh hưởng việc dùng website; bạn có thể đổi ý bất kỳ
+            lúc nào ở chân trang. Chi tiết:{" "}
+            <Link href="/privacy" className="underline">
+              Chính sách bảo mật
+            </Link>{" "}
+            ·{" "}
+            <Link href="/cookies" className="underline">
+              Chính sách cookie
+            </Link>
+            .
           </p>
           {custom && (
             <div className="mt-3 flex flex-wrap gap-4 text-sm">
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={analytics} onChange={(e) => setAnalytics(e.target.checked)} />
-                Thống kê <span className="font-mono text-xs text-muted">analytics_storage</span>
+                <input
+                  type="checkbox"
+                  checked={analytics}
+                  onChange={(e) => setAnalytics(e.target.checked)}
+                />
+                Thống kê{" "}
+                <span className="font-mono text-xs text-muted">
+                  analytics_storage
+                </span>
               </label>
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={ads} onChange={(e) => setAds(e.target.checked)} />
-                Đo lường quảng cáo <span className="font-mono text-xs text-muted">ad_storage + ad_user_data</span>
+                <input
+                  type="checkbox"
+                  checked={ads}
+                  onChange={(e) => setAds(e.target.checked)}
+                />
+                Đo lường quảng cáo{" "}
+                <span className="font-mono text-xs text-muted">
+                  ad_storage + ad_user_data
+                </span>
               </label>
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={personal} onChange={(e) => setPersonal(e.target.checked)} />
-                Quảng cáo cá nhân hoá <span className="font-mono text-xs text-muted">ad_personalization</span>
+                <input
+                  type="checkbox"
+                  checked={personal}
+                  onChange={(e) => setPersonal(e.target.checked)}
+                />
+                Quảng cáo cá nhân hoá{" "}
+                <span className="font-mono text-xs text-muted">
+                  ad_personalization
+                </span>
               </label>
             </div>
           )}
@@ -82,7 +115,12 @@ export function ConsentBanner() {
           <button
             className="btn-ghost"
             onClick={() =>
-              apply({ analytics_storage: "denied", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" })
+              apply({
+                analytics_storage: "denied",
+                ad_storage: "denied",
+                ad_user_data: "denied",
+                ad_personalization: "denied",
+              })
             }
           >
             Từ chối tất cả
@@ -90,7 +128,12 @@ export function ConsentBanner() {
           <button
             className="btn-primary"
             onClick={() =>
-              apply({ analytics_storage: "granted", ad_storage: "granted", ad_user_data: "granted", ad_personalization: "granted" })
+              apply({
+                analytics_storage: "granted",
+                ad_storage: "granted",
+                ad_user_data: "granted",
+                ad_personalization: "granted",
+              })
             }
           >
             Chấp nhận tất cả

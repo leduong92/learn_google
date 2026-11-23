@@ -78,6 +78,13 @@ body {
 .prose-lab table {
   @apply my-3 w-full border-collapse text-sm;
 }
+/* Điện thoại: bảng rộng cuộn ngang trong khung, không làm cả trang tràn */
+@media (max-width: 639px) {
+  .prose-lab table {
+    display: block;
+    overflow-x: auto;
+  }
+}
 .prose-lab th,
 .prose-lab td {
   @apply border border-line px-3 py-2 text-left align-top;

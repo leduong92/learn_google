@@ -10,10 +10,11 @@ const ROWS: Row[] = [
   ["lab_consent_ui (localStorage)", SITE.brand, "Ghi nhớ lựa chọn cookie của bạn", "Cần thiết", "Đến khi bạn xoá"],
   ["lab_cart, lab_settings (localStorage)", SITE.brand, "Giỏ hàng giả lập, cài đặt lab", "Cần thiết", "Đến khi bạn xoá"],
   ["lab_attribution, lab_stats (localStorage)", SITE.brand, "Ghi nhận nguồn truy cập và phễu chuyển đổi để hiển thị cho chính bạn — không gửi đi đâu", "Cần thiết cho chức năng lab", "Đến khi bạn xoá"],
-  ["lab_orders, lab_tracked_purchases, lab_customers (localStorage)", SITE.brand, "Đơn hàng giả lập (thay cho máy chủ, giữ 20 đơn gần nhất), danh sách mã đơn đã gửi purchase để không gửi trùng, email đã từng đặt để phân biệt khách mới/cũ — không gửi đi đâu", "Cần thiết", "Đến khi bạn xoá"],
+  ["lab_orders, lab_tracked_purchases, lab_customers, lab_account (localStorage)", SITE.brand, "Đơn hàng giả lập (thay cho máy chủ, giữ 20 đơn gần nhất), danh sách mã đơn đã gửi purchase để không gửi trùng, email đã từng đặt để phân biệt khách mới/cũ, tài khoản demo (tên, email, mã u_…; không có mật khẩu) — không gửi đi đâu", "Cần thiết", "Đến khi bạn xoá"],
   ["_ga, _ga_<ID>", "Google Analytics", "Phân biệt người dùng và phiên để thống kê", "analytics_storage", "Tối đa 2 năm"],
   ["_gcl_au", "Google Ads", "Đo lường chuyển đổi quảng cáo", "ad_storage", "90 ngày"],
   ["_gcl_aw, _gcl_gb", "Google Ads (Conversion Linker)", "Lưu mã click quảng cáo (gclid/gbraid) để gán chuyển đổi", "ad_storage", "90 ngày"],
+  ["NID, AEC… trên miền google.com", "Google Maps (bản đồ nhúng ở trang Showroom)", "Hiển thị bản đồ; Google có thể dùng cho mục đích riêng của Google", "Chỉ tải khi bạn bấm “Tải bản đồ”", "Tối đa 6 tháng"],
   ["IDE, test_cookie và cookie trên miền doubleclick.net / google.com", "Google", "Quảng cáo nhắm lại và cá nhân hoá", "ad_storage + ad_personalization", "13–24 tháng tuỳ khu vực"],
 ];
 

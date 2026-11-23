@@ -4,7 +4,7 @@ export const metadata = { title: "Bài học GTM & Google Ads — từ đầu" }
 
 /* ---------------- Code mẫu cho từng bài ---------------- */
 
-const B1_ENV = `NEXT_GTM_ID=GTM-KLQVQN67`;
+const B1_ENV = `NEXT_GTM_ID=GTM-XXXXXXX   # thay bằng ID container của bạn`;
 
 const B1_LAYOUT = `// app/layout.tsx — đặt ngay dưới các dòng import
 const GTM_ID = process.env.NEXT_GTM_ID;
@@ -228,23 +228,87 @@ gtag('js', new Date());`;
 
 const B7_BANNER = `// components/ConsentBanner.tsx — trong hàm apply(), chỗ "TODO Bài 7"
 window.gtag?.("consent", "update", state);
-window.dataLayer.push({ event: "consent_update" });`;
+window.dataLayer?.push({ event: "consent_update" }); // ?. — không lỗi khi chưa nhúng GTM`;
 
-const B8_USERDATA = `// lib/datalayer.ts — trong trackPurchase(), chỗ "TODO Bài 8"
-// Nhớ import: consentStore (từ "@/lib/lab-state")
-const allowed =
-  order.ec_consent && consentStore.get().state.ad_user_data === "granted";
+const B8_USERDATA = `// lib/datalayer.ts — viết lại trackPurchase() của Bài 5: GỘP user_data vào CÙNG MỘT lần push
+// Nhớ import: consentStore (từ "./lab-state")
+export function trackPurchase(order: OrderDto) {
+  const tracked = readTracked();
+  if (tracked.includes(order.transaction_id)) return; // ✅ chống trùng — luôn đặt TRƯỚC mọi lần push
 
-window.dataLayer.push({
-  event: "purchase",
-  ecommerce: { /* như Bài 5 */ },
-  ...(allowed && {
-    user_data: {
-      email: order.customer.email.trim().toLowerCase(),
-      phone_number: "+84" + order.customer.phone.replace(/\\D/g, "").replace(/^0/, ""),
+  const allowed =
+    order.ec_consent && consentStore.get().state.ad_user_data === "granted";
+
+  window.dataLayer = window.dataLayer || [];
+  // Reset cả ecommerce lẫn user_data: dataLayer GỘP dữ liệu giữa các lần push,
+  // không reset thì email của đơn trước còn "dính" sang đơn sau (kể cả khi đơn sau không đồng ý)
+  window.dataLayer.push({ ecommerce: null, user_data: null });
+  window.dataLayer.push({
+    event: "purchase",
+    ecommerce: {
+      currency: "VND",
+      transaction_id: order.transaction_id,
+      value: order.value,
+      shipping: order.shipping,
+      coupon: order.coupon || undefined,
+      customer_type: order.new_customer ? "new" : "returning",
+      items: order.items.flatMap((it) => {
+        const p = getProductById(it.productId);
+        return p ? [toItem(p, it.quantity, it.variant)] : [];
+      }),
     },
-  }),
+    // Chỉ thêm user_data khi được phép — không được phép thì KHÔNG có khoá này
+    ...(allowed && {
+      user_data: {
+        email: order.customer.email.trim().toLowerCase(),
+        phone_number: "+84" + order.customer.phone.replace(/\\D/g, "").replace(/^0/, ""),
+      },
+    }),
+  });
+
+  localStorage.setItem(TRACKED_KEY, JSON.stringify([...tracked, order.transaction_id].slice(-50)));
+}`;
+
+const B10_LEAD = `// components/SiteFooter.tsx — trong onSubmit(), chỗ "TODO Bài 10"
+window.dataLayer?.push({
+  event: "generate_lead",
+  lead_source: "newsletter_footer",
+  value: 50000,        // ước tính 1 người đăng ký đáng bao nhiêu
+  currency: "VND",
 });`;
+
+const B10_SIGNUP = `// app/register/page.tsx — hàm register(), chỗ TODO "push event sign_up"
+window.dataLayer?.push({ event: "sign_up", method });   // "email" hoặc "google"`;
+
+const B10_SIGNUP_LEAD = `// app/register/page.tsx — BÊN TRONG if (newsletter) { … } có sẵn, chỗ TODO "generate_lead"
+// (chỉ 1 lần push này — sign_up đã push ở trên rồi)
+window.dataLayer?.push({
+  event: "generate_lead",
+  lead_source: "register_form",
+  value: 50000,
+  currency: "VND",
+});`;
+
+const B10_LOGIN = `// app/register/page.tsx — hàm login(), chỗ TODO "login"
+window.dataLayer?.push({ event: "login", method: account.method });`;
+
+const B10_FLOW = `Khách add_to_cart nhưng KHÔNG purchase
+  → GA4 gom vào Audience "Bỏ giỏ 14 ngày"         (chỉ người đã đồng ý ad_personalization — Bài 7)
+  → tự đẩy sang Google Ads (liên kết GA4 ↔ Ads)
+  → chiến dịch Display / Demand Gen chỉ hiện quảng cáo cho nhóm này
+  → khách quay lại mua → purchase (đo bằng Bài 5–6)`;
+
+const B11_FLOW = `Người dùng tìm "sofa gỗ gần đây" trên Google Maps
+  └─ Quảng cáo Maps = ghim / kết quả của Google Business Profile (KHÔNG phải trang web)
+       ├─ bấm Chỉ đường / Gọi ngay trên quảng cáo  → Google tự đo trong Google Ads (không qua GTM)
+       └─ bấm vào website → /maps → bấm "Chỉ đường" / "Gọi"
+                                   └─ GTM: trigger Click → GA4 get_directions / click_to_call (bài này)`;
+
+const B11_LINKS = `<!-- app/maps/StoreMap.tsx — đã có sẵn, KHÔNG cần sửa -->
+<a href="https://www.google.com/maps/dir/?api=1&destination=21.0287,105.8524"
+   target="_blank" data-store-id="hn-hoan-kiem">Chỉ đường</a>
+
+<a href="tel:+840000000001" data-store-id="hn-hoan-kiem">Gọi 0000 000 001</a>`;
 
 /* ---------------- Danh sách bài ---------------- */
 
@@ -260,6 +324,8 @@ const LESSONS = [
   ["bai-7", "Bài 7", "Consent Mode v2 (bắt buộc trước khi public)"],
   ["bai-8", "Bài 8", "Enhanced Conversions"],
   ["bai-9", "Bài 9", "Publish & đưa lên mạng"],
+  ["bai-10", "Bài 10", "Lead, đăng ký & remarketing người bỏ giỏ"],
+  ["bai-11", "Bài 11", "Showroom & quảng cáo Google Maps"],
 ] as const;
 
 const DLV_SET: [string, string, string][] = [
@@ -380,9 +446,14 @@ export default function GuidePage() {
           </li>
           <li>Nút <b>dataLayer</b> ở góc phải màn hình cho bạn thấy mọi thứ bạn push, kèm cảnh báo ⚠ nếu dữ liệu sai.</li>
           <li>
-            Bí quá thì xem <b>đáp án</b> ở nhánh <code>dev</code> (bản làm sẵn), ví dụ:{" "}
-            <code>git show dev:app/products/[slug]/ProductDetail.tsx</code>. Bản đáp án dùng hàm <code>trackEcommerce</code> trong{" "}
-            <code>lib/tracking.ts</code> của nhánh đó.
+            Bí quá thì xem <b>đáp án</b>: code mẫu ngay trong từng bài; bản làm sẵn ở nhánh <code>dev</code> (cấu trúc cũ: dùng{" "}
+            <code>trackEcommerce</code> trong <code>lib/tracking.ts</code> và trang <code>/checkout/success</code>), ví dụ{" "}
+            <code>git show dev:app/products/[slug]/ProductDetail.tsx</code>. Làm xong một lượt thì commit lại — nhánh đó thành đáp án
+            của chính bạn khi luyện lại.
+          </li>
+          <li>
+            Gặp menu, trường lạ trong GTM / GA4 / Google Ads → tra <Link href="/lab/glossary" className="text-accent underline">📖 Từ
+            điển</Link>. Giao diện Google đổi thường xuyên; thấy khác hướng dẫn thì tìm theo tên trường.
           </li>
           <li>Học trên <code>localhost</code> trước. Chỉ đưa lên tên miền thật sau Bài 7.</li>
         </ul>
@@ -411,6 +482,11 @@ export default function GuidePage() {
           Vì sao script (1) đứng trước (2)? <code>gtm.js</code> tải bất đồng bộ (<code>async</code>); đặt phần tạo dataLayer lên trước
           để chắc chắn nó luôn có sẵn khi GTM chạy. Vì sao không dán nguyên văn? JSX không cho viết nội dung bên trong thẻ{" "}
           <code>&lt;script&gt;</code> như HTML, phải dùng <code>dangerouslySetInnerHTML</code>.
+        </p>
+        <p className="text-sm text-muted">
+          Console báo <i>“Encountered a script tag while rendering React component”</i> ngay sau khi bạn sửa <code>layout.tsx</code>? Đó
+          là cảnh báo của chế độ dev khi trang tự tải lại (hot reload) — GTM vẫn chạy. Mở tab mới thì hết. (Cách khác của Next.js:{" "}
+          <code>next/script</code> với <code>strategy=&quot;beforeInteractive&quot;</code>.)
         </p>
         <h3>Trong GTM — bật Preview (Tag Assistant)</h3>
         <p>Chưa cần tạo tag nào. Giữ <code>npm run dev</code> đang chạy, rồi:</p>
@@ -520,6 +596,14 @@ export default function GuidePage() {
           Đặt tên theo quy ước <code>Loại - Chi tiết</code> ngay từ đầu: tag <code>GA4 - …</code>, trigger <code>CE - …</code> (Custom
           Event), biến <code>DLV - …</code> (Data Layer Variable). Container sau này có hàng chục tag, tên rõ ràng giúp tìm nhanh.
         </p>
+
+        <Warn title="GA4 có thể tự thêm tag vào GTM của bạn">
+          <p>
+            Khi đi qua màn hình cài đặt của GA4, Google có thể tự tạo tag <code>Google Analytics G-…</code> (loại “Google Analytics”,
+            trigger Initialization) trong container của bạn. Nó trùng việc với <code>GA4 - Google Tag</code> → vào Tags, tick tag đó →
+            🗑 Delete. Container chỉ nên có <b>một</b> Google tag cho mỗi ID.
+          </p>
+        </Warn>
 
         <h3>3. Đọc Tag Assistant cho đúng</h3>
         <ul>
@@ -1232,13 +1316,19 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
             Menu trái <b>Goals (Mục tiêu)</b> → <b>Conversions</b> → <b>Summary</b> → <b>+ Create conversion action</b>.
           </li>
           <li>
-            Chọn <b>Website</b> → nhập tên miền của bạn → <b>Scan</b>.
+            Chọn <b>Website</b> → màn hình <b>Measure conversions on your website</b>: nhập tên miền (Google không quét được{" "}
+            <code>localhost</code>).
           </li>
           <li>
-            Kéo xuống “Create conversion actions manually using code” → <b>+ Add a conversion action manually</b>.
+            Mục <b>Choose data sources</b>: tick <b>Google tag</b> (Google tạo Google tag của tài khoản Ads, ID dạng{" "}
+            <code>GTM-…</code> + <code>AW-…</code>). <b>Chưa bấm Link</b> property GA4 — tránh mỗi đơn bị tính 2 lần. Hiện “Not installed
+            yet” hay lỗi “Something went wrong” → đóng thông báo, bấm <b>Done</b> vẫn đi tiếp được.
           </li>
-          <li>
-            Điền (ý nghĩa từng ô: <Link href="/lab/glossary#ads" className="text-accent underline">Từ điển → Google Ads</Link>):
+          <li>Tạo conversion action <b>thủ công</b> (manually) và điền:</li>
+          <li style={{ listStyle: "none" }}>
+            <p className="text-sm text-muted">
+              Ý nghĩa từng ô: <Link href="/lab/glossary#ads" className="text-accent underline">Từ điển → Google Ads</Link>.
+            </p>
             <table>
               <thead>
                 <tr>
@@ -1252,8 +1342,15 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
                 <tr><td>Conversion name</td><td><code>Purchase - Nha Moc lab</code></td><td>Tên dễ nhận</td></tr>
                 <tr>
                   <td>Value</td>
-                  <td><b>Use different values for each conversion</b>, mặc định <code>1</code> VND</td>
-                  <td>Mỗi đơn một giá trị — lấy từ tag</td>
+                  <td>
+                    <b>Use different values for each conversion</b> → Set up using: <b>Event snippet</b> (không bấm “Set up
+                    conversion values”), mặc định <code>1</code> VND
+                  </td>
+                  <td>
+                    Mỗi đơn một giá trị — tag GTM gửi kèm (<code>{"{{DLV - ecommerce.value}}"}</code>). Event snippet = giá trị đi
+                    theo event, đúng cách GTM làm; <i>Google tag</i> là cách cấu hình lấy giá trị trên giao diện Google, không cần
+                    code
+                  </td>
                 </tr>
                 <tr><td>Count</td><td><b>Every</b></td><td>Mua hàng: đơn nào cũng tính</td></tr>
                 <tr><td>Click-through conversion window</td><td>30 days</td><td>Mặc định</td></tr>
@@ -1262,8 +1359,9 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
             </table>
           </li>
           <li>
-            <b>Done</b> → <b>Save and continue</b> → màn hình cài tag chọn <b>Use Google Tag Manager</b> → ghi lại{" "}
-            <b>Conversion ID</b> (dãy số) và <b>Conversion Label</b> (chuỗi).
+            Màn hình <b>“You are almost done!”</b> → tab <b>Use Google Tag Manager</b> → ghi lại <b>Conversion ID</b> (dãy số) và{" "}
+            <b>Conversion Label</b> (chuỗi). <b>Đừng bấm</b> “Set up in Google Tag Manager” (để Google tạo hộ) — mình tự làm để hiểu.
+            Kéo xuống → <b>Done</b>.
           </li>
         </ol>
         <Warn title="Tài khoản đang chạy quảng cáo thật?">
@@ -1281,6 +1379,10 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
           <li>Tags → <b>New</b> → tên <code>Conversion Linker</code> → loại <b>Conversion Linker</b> (để mặc định).</li>
           <li>Triggering → <b>All Pages</b> (hoặc Initialization - All Pages) → Save.</li>
         </ol>
+        <p className="text-sm text-muted">
+          GTM gắn nhãn <b>LEGACY</b> cho loại tag này vì Google tag (<code>AW-…</code>) giờ tự lưu gclid. Vẫn nên tạo trong bài để thấy
+          cơ chế — không gây đếm trùng.
+        </p>
 
         <h3>Bước 3 — Trigger riêng cho purchase</h3>
         <p>
@@ -1323,12 +1425,19 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
           </li>
           <li>Triggering → <b>chỉ</b> <code>CE - purchase</code> → Save.</li>
           <li>
-            Nếu GTM báo kiểu <b>“Google tag not found”</b> cho <code>AW-…</code>: bấm theo gợi ý để tạo <b>Google Tag</b> với Tag ID{" "}
-            <code>AW-&lt;Conversion ID&gt;</code>, trigger <b>Initialization - All Pages</b> — cần cho chuyển đổi và Enhanced
-            Conversions (Bài 8) hoạt động đầy đủ.
+            Cần một <b>Google Tag</b> cho Ads: Tag ID <code>AW-&lt;Conversion ID&gt;</code>, trigger <b>Initialization - All Pages</b>,
+            tên <code>Google Tag - Ads</code>. Xem danh sách Tags trước: Google Ads thường <b>đã tự tạo</b> tag{" "}
+            <code>Google Ads AW-…</code> khi bạn tick “Google tag” ở Bước 1 → giữ <b>một</b> cái (đổi tên cho dễ nhận), đừng tạo thêm.
           </li>
           <li>Bấm <b>Preview</b>.</li>
         </ol>
+
+        <Warn title="Thấy hit “User provided data” trong Tag Assistant?">
+          <p>
+            Google tag đang tự dò email/SĐT trong form checkout và gửi đi dù người dùng chưa đồng ý. Tắt “Automatically detect
+            user-provided data” ngay — cách làm ở <a href="#bai-8" className="text-accent underline">Bài 8, mục 3</a>.
+          </p>
+        </Warn>
 
         <h3>Bước 5 — Thử như khách đến từ quảng cáo</h3>
         <ol>
@@ -1358,6 +1467,38 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
             <tr><td>Đơn “Thẻ bị từ chối”</td><td>Tag Ads <b>không</b> fire</td></tr>
           </tbody>
         </table>
+        <Warn title="Không thấy chip Ads riêng? Nó nằm trong chip GTM">
+          <p>
+            Hàng chip trên cùng chỉ có <code>GTM-…</code> và <code>G-…</code> là bình thường. Google tag của Ads được tải{" "}
+            <b>bên trong</b> container GTM (tag <code>Google Tag - Ads</code>) nên Tag Assistant gộp nó vào chip GTM:
+          </p>
+          <ul>
+            <li>
+              Chip <code>GTM-…</code> có thêm <b>biểu tượng chữ A</b> (logo Google Ads) bên cạnh.
+            </li>
+            <li>
+              Bấm chip GTM → <b>Container Details</b> → <b>Destination ID</b> = <code>AW-&lt;Conversion ID&gt;</code> — đúng tài khoản
+              Ads của bạn.
+            </li>
+            <li>
+              Xem hit gửi cho Ads: bấm mốc <b>purchase</b> ở cột trái (không phải Summary) → vẫn ở chip GTM → tab <b>Hits Sent</b> (bấm
+              biểu tượng A nếu muốn lọc riêng hit Ads) → mở hit conversion: <code>label</code> = Conversion Label của action,{" "}
+              <code>value</code> = số tiền, <code>currency_code</code> = <code>VND</code>, <code>oid</code> = mã đơn <code>NM-…</code>.
+            </li>
+          </ul>
+          <p>
+            Chip <code>G-…</code> riêng là GA4 (được tải bằng Google tag riêng). Một chip riêng <code>GTM-…</code> lạ (không phải
+            container của bạn) là container Google tag Google tự tạo — đừng xoá.
+          </p>
+        </Warn>
+        <Warn title="“Fired 2 times” ở Summary có phải bị trùng?">
+          <p>
+            <b>Summary</b> cộng dồn mọi mốc trong phiên Preview: mua 2 đơn thì tag Ads ghi “Fired 2 times” là đúng. Muốn biết có trùng
+            không, bấm <b>từng mốc purchase</b>: mỗi mốc tag Ads chỉ được fire <b>1 lần</b>. Fire 2 lần ở cùng một mốc → tag đang gắn
+            thêm trigger khác ngoài <code>CE - purchase</code>. Tạo conversion action mới thì nhớ thay <b>Conversion Label</b> mới
+            vào tag — label cũ sẽ đổ dữ liệu vào action cũ.
+          </p>
+        </Warn>
         <p className="text-sm text-muted">
           gclid trong lab là giả nên Google Ads <b>không</b> hiện chuyển đổi trong báo cáo — bài này để thấy cơ chế và kiểm tra tag
           đúng. Sau khi Publish GTM và có người vào tên miền thật, conversion action chuyển từ <i>Unverified</i> sang có tín hiệu tag;
@@ -1368,20 +1509,143 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
             "Cookie _gcl_aw xuất hiện sau khi click quảng cáo giả.",
             "Conversion Linker fire ở mọi trang.",
             "Tag Ads Conversion fire đúng 1 lần ở purchase, với Value, Transaction ID, Currency có giá trị.",
+            "Chip GTM có biểu tượng A, Destination ID = AW-…; Hits Sent ở mốc purchase có 1 hit conversion với label đúng của action.",
             "Không fire ở event khác, không fire khi reload hay khi thẻ bị từ chối.",
           ]}
         />
 
-        <h3>Bài tập thêm — chuyển đổi phụ generate_lead</h3>
+        <h3>Bước 6 — Tạo chiến dịch Search (luyện giao diện, KHÔNG Publish)</h3>
+        <Warn title="Đi hết các bước rồi thoát — đừng bấm Publish">
+          <p>
+            Website lab là cửa hàng demo: có giá, có nút mua nhưng không bán thật. Chạy quảng cáo trỏ về đây dễ bị khoá tài khoản vì{" "}
+            <b>Misrepresentation</b>. Google tự lưu bản nháp (draft) sau mỗi bước — học xong thì đóng lại. Website bán hàng thật làm
+            y hệt, chỉ khác URL và conversion action.
+          </p>
+        </Warn>
+        <p className="text-sm text-muted">
+          Giao diện Google Ads thay đổi thường xuyên; tên dưới đây theo giao diện tiếng Anh cuối 2026. Một số mục (EU political ads,
+          AI Max…) có thể nằm ở bước khác hoặc không hiện với tài khoản của bạn.
+        </p>
         <ol>
           <li>
-            Form chân trang (<code>components/SiteFooter.tsx</code>, tìm <code>TODO Bài 6</code>): push <code>generate_lead</code> với{" "}
-            <code>value</code> ước tính (vd. <code>50000</code>) và <code>currency: &quot;VND&quot;</code>. <b>Không</b> đưa email thô
-            vào dataLayer.
+            <b>Campaigns</b> → nút <b>+</b> → <b>New campaign</b> (có tài khoản hiện là <b>Create → Campaign</b>).
           </li>
-          <li>Google Ads: tạo conversion action loại <b>Submit lead form</b>, Count = <b>One</b>, đặt <b>Secondary</b>.</li>
-          <li>GTM: trigger <code>CE - generate_lead</code> + tag Ads Conversion thứ hai.</li>
+          <li>
+            <b>Choose an objective</b> → <b>Sales</b> (mục tiêu mua hàng). <b>Select a campaign type</b> → <b>Search</b>.
+          </li>
+          <li>
+            Trang đầu tiên của chiến dịch:
+            <ul>
+              <li><b>Campaign name</b>: đặt theo quy ước dễ lọc, vd. <code>NM-Search-Sofa-VN</code> (thương hiệu – loại – nhóm hàng – vùng).</li>
+              <li>
+                <b>Use these conversion goals for campaign performance optimization</b>: giữ <b>Purchases (account default)</b> — bắt
+                buộc có ít nhất 1 mục tiêu. Đây là conversion action <code>Purchase - Nha Moc lab</code> ở Bước 1. Dấu ⚠ cạnh “1
+                action” thường là <i>No recent conversions</i> hoặc <i>Unverified</i> — di chuột để xem, không chặn việc tạo chiến
+                dịch. Lead / Get directions để Secondary nên không nằm ở đây.
+              </li>
+              <li>
+                <b>Select the results you want to get from this campaign</b>: tick <b>Website visits</b> → URL trang chủ. Không tick{" "}
+                <b>Phone calls</b> (trừ khi muốn nút gọi trên quảng cáo). → <b>Continue</b>.
+              </li>
+            </ul>
+          </li>
+          <li>
+            <b>Bidding</b> → <b>What do you want to focus on?</b>
+            <table>
+              <thead>
+                <tr><th>Tình huống</th><th>Chọn</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Website mới, chưa có chuyển đổi</td>
+                  <td><b>Conversions</b> (= Maximize conversions), hoặc <b>Clicks</b> + đặt giới hạn CPC tối đa nếu muốn kiểm soát giá mỗi click</td>
+                </tr>
+                <tr>
+                  <td>Đã có đều đặn khoảng 15–30 đơn/30 ngày</td>
+                  <td><b>Conversion value</b> + <b>Target ROAS</b> (vì đơn có giá trị khác nhau), hoặc <b>Conversions</b> + <b>Target CPA</b></td>
+                </tr>
+              </tbody>
+            </table>
+            <span className="text-sm text-muted">
+              Ô <i>Customer acquisition</i> (trả giá cao hơn cho khách mới) nếu có: để trống ở chiến dịch đầu — cần Google Ads biết
+              ai là khách cũ, phần nâng cao.
+            </span>
+          </li>
+          <li>
+            <b>Campaign settings</b>:
+            <ul>
+              <li>
+                <b>Networks</b>: bỏ tick <b>Display Network</b> (quảng cáo chữ hiện trên các website khác — tốn tiền, ít mua).{" "}
+                <b>Google Search Partners</b>: chiến dịch đầu nên bỏ tick để số liệu chỉ từ Google Search.
+              </li>
+              <li>
+                <b>Locations</b>: Vietnam hoặc chỉ các tỉnh/thành bạn giao hàng. <b>Location options</b> → <b>Presence</b> (người đang ở
+                hoặc thường ở đó) thay vì mặc định <i>Presence or interest</i> (cả người ở nơi khác chỉ quan tâm).
+              </li>
+              <li><b>Languages</b>: Vietnamese + English (nhiều người dùng điện thoại cài tiếng Anh).</li>
+              <li>
+                <b>Audience segments</b>: thêm <code>Bỏ giỏ 14 ngày</code> (<a href="#bai-10" className="text-accent underline">Bài 10</a>)
+                ở chế độ <b>Observation</b> — vẫn hiện cho mọi người, chỉ theo dõi riêng nhóm này.
+              </li>
+              <li>
+                Câu hỏi <b>EU political ads</b> (nếu có): chọn <b>No</b>.
+              </li>
+              <li><b>More settings</b>: ngày bắt đầu/kết thúc, <b>Ad schedule</b> (khung giờ chạy) — có thể bỏ qua.</li>
+            </ul>
+          </li>
+          <li>
+            <b>AI Max for Search campaigns</b> — <b>bật sẵn</b> với chiến dịch Search mới. Gồm 3 phần:
+            <ul>
+              <li><b>Search term matching</b>: tự mở rộng ra cả các từ khoá bạn không nhập.</li>
+              <li><b>Text customization</b>: tự viết thêm tiêu đề/mô tả từ trang web của bạn.</li>
+              <li><b>Final URL expansion</b>: tự chọn trang đích khác trên website thay cho URL bạn đặt.</li>
+            </ul>
+            <span className="text-sm text-muted">
+              Gợi ý: chiến dịch đầu tiên, ngân sách nhỏ → <b>tắt</b> để biết chính xác quảng cáo hiện với từ khoá nào, dẫn về trang nào.
+              Bật lại khi đã có dữ liệu chuyển đổi — Google cũng nói các tính năng này cần chiến lược giá thầu theo chuyển đổi mới chạy
+              tốt.
+            </span>
+          </li>
+          <li>
+            <b>Keywords and ads</b> (Ad group):
+            <ul>
+              <li>Ad group name theo nhóm sản phẩm, vd. <code>Sofa gỗ</code>. Mỗi ad group một chủ đề.</li>
+              <li>
+                <b>Keywords</b> mỗi dòng 1 từ khoá, 5–15 từ. Kiểu khớp: <code>sofa gỗ</code> (broad — mặc định, rộng nhất),{" "}
+                <code>&quot;sofa gỗ&quot;</code> (phrase), <code>[sofa gỗ óc chó]</code> (exact).
+              </li>
+              <li>
+                Quảng cáo (Responsive search ad): <b>Final URL</b> = trang sản phẩm/danh mục khớp từ khoá (không phải luôn là trang chủ);{" "}
+                <b>Display path</b> vd. <code>sofa/go-oc-cho</code>; <b>Headlines</b> tối đa 15, mỗi cái ≤ 30 ký tự (viết ít nhất 8–10);{" "}
+                <b>Descriptions</b> tối đa 4, mỗi cái ≤ 90 ký tự. Xem <b>Ad strength</b> bên phải, nhắm mức Good/Excellent.
+              </li>
+              <li>
+                <b>Assets</b>: <b>Sitelinks</b> (link phụ: Sofa, Bàn ăn, Showroom…), <b>Callouts</b> (“Giao hàng toàn quốc”, “Bảo
+                hành 5 năm” — chỉ ghi điều có thật), <b>Call</b>, <b>Location</b> (cần Business Profile —{" "}
+                <a href="#bai-11" className="text-accent underline">Bài 11</a>), <b>Images</b>.
+              </li>
+            </ul>
+          </li>
+          <li>
+            <b>Budget</b>: ngân sách <b>trung bình mỗi ngày</b>. Có ngày Google tiêu tới gấp đôi, nhưng cả tháng không vượt khoảng 30,4
+            lần ngân sách ngày.
+          </li>
+          <li>
+            <b>Review</b>: Google liệt kê lỗi cần sửa (thiếu từ khoá, URL sai, <b>Billing</b> chưa cài…) với nút <b>Fix it</b>. Chạy
+            thật thì cài thanh toán rồi bấm <b>Publish campaign</b>; quảng cáo thường được duyệt trong khoảng 1 ngày làm việc.{" "}
+            <b>Lab: dừng ở đây, đóng lại.</b>
+          </li>
         </ol>
+        <p className="text-sm text-muted">
+          Sau khi chạy thật: kiểm tra <b>Insights and reports → Search terms</b> mỗi tuần, thêm từ không liên quan vào{" "}
+          <b>Negative keywords</b> (vd. <code>cũ</code>, <code>thanh lý</code>, <code>tự đóng</code>); trong Bài 6 tag Ads đã đo
+          purchase nên cột Conversions sẽ có số.
+        </p>
+
+        <p className="text-sm text-muted">
+          Đo thêm đăng ký email (<code>generate_lead</code>), tạo tài khoản (<code>sign_up</code>) và chạy quảng cáo nhắm lại người bỏ
+          giỏ: xem <a href="#bai-10" className="text-accent underline">Bài 10</a>.
+        </p>
 
         <h3>Tự kiểm tra hiểu bài</h3>
         <ul>
@@ -1400,47 +1664,124 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
         <Code>{B7_CONSENT}</Code>
         <h3>2. Khi người dùng bấm banner — components/ConsentBanner.tsx</h3>
         <Code>{B7_BANNER}</Code>
+        <p className="text-sm text-muted">
+          Banner, checkbox và nơi lưu lựa chọn (<code>lab_consent_ui</code> trong localStorage) đã làm sẵn — bạn chỉ báo lựa chọn cho
+          Google. 4 loại consent: <code>analytics_storage</code> (cookie GA4), <code>ad_storage</code> (cookie quảng cáo),{" "}
+          <code>ad_user_data</code> (gửi dữ liệu người dùng cho Google Ads — Bài 8), <code>ad_personalization</code> (remarketing).
+        </p>
         <h3>Trong GTM</h3>
         <p>
           Admin → Container Settings → tick <b>Enable consent overview</b>. Các tag Google tự tuân theo consent; tag ngoài Google
           (Facebook, TikTok…) phải đặt “Require additional consent”.
         </p>
+        <p className="text-sm text-muted">
+          Cách trên là <b>Advanced consent mode</b>: khi bị từ chối, tag Google vẫn chạy nhưng <b>không ghi cookie</b>, chỉ gửi tín hiệu
+          ẩn danh (tham số <code>gcs=G100</code> trong hit; đồng ý hết thì <code>G111</code>). Muốn chặt hơn (<b>Basic</b>): không cho tag
+          Google nào chạy trước khi đồng ý — dùng trigger <code>consent_update</code> hoặc “Require additional consent”.
+        </p>
         <Check
           items={[
             "Cửa sổ ẩn danh → bấm “Từ chối tất cả” → DevTools → Cookies: KHÔNG có _ga, _gcl_*.",
             "Bấm “Cài đặt cookie” ở chân trang → “Chấp nhận tất cả” → có cookie _ga.",
-            "Tag Assistant → tab Consent thấy Default = denied, Update = granted.",
+            "Tag Assistant → tab Consent: On-page Default = Denied; sau khi chấp nhận, On-page Update = Granted.",
+            "Hits Sent khi đang từ chối: hit vẫn có nhưng tham số gcs=G100 (không cookie).",
           ]}
         />
       </Lesson>
 
       <Lesson id="bai-8">
         <p>
-          Enhanced Conversions gửi email/SĐT (Google tự mã hoá SHA-256) để đối chiếu chuyển đổi chính xác hơn. Chỉ được gửi khi người
-          dùng <b>tích ô đồng ý riêng</b> ở checkout <b>và</b> đã cho phép <code>ad_user_data</code>.
+          Enhanced Conversions gửi kèm email/SĐT của người mua (Google tự mã hoá SHA-256) để Google Ads đối chiếu chuyển đổi chính xác
+          hơn khi cookie bị chặn. Chỉ được gửi khi người dùng <b>tích ô đồng ý riêng</b> ở checkout <b>và</b> đã cho phép{" "}
+          <code>ad_user_data</code> ở banner cookie — nên phải làm <a href="#bai-7" className="text-accent underline">Bài 7</a> trước.
+        </p>
+
+        <h3>1. Code — chỉ thêm user_data khi được phép</h3>
+        <p>
+          <b>Thay cả hàm</b> <code>trackPurchase</code> của Bài 5 bằng bản dưới — đừng dán thêm một lần push nữa, nếu không mỗi đơn sẽ
+          có 2 event <code>purchase</code> (một cái rỗng, không có <code>transaction_id</code>).
         </p>
         <Code>{B8_USERDATA}</Code>
+        <p className="text-sm text-muted">
+          Chuẩn hoá trước khi gửi: email viết thường, bỏ khoảng trắng (email mẫu cố ý là <code>Nguyen.An@Example.com </code>); SĐT dạng
+          quốc tế <code>+84…</code>. Tên trường chuẩn: <Link href="/lab/glossary#user-data" className="text-accent underline">Từ điển → user_data</Link>.
+        </p>
+
+        <h3>2. Google Ads — bật Enhanced conversions (giao diện 2026)</h3>
         <ol>
-          <li>Google Ads → Goals → Settings → bật <b>Enhanced conversions for web</b> → phương thức Google Tag Manager.</li>
           <li>
-            Trong tag Ads Conversion (Bài 6): tick <b>Include user-provided data</b> → New Variable → <b>User-Provided Data</b> → Manual
-            → Email = Data Layer Variable <code>user_data.email</code>, Phone = <code>user_data.phone_number</code>.
+            Menu trái <b>Goals</b> → <b>Settings</b>. Không thấy mục Settings? Mở thẳng{" "}
+            <code className="break-all">ads.google.com/aw/conversions/customersettings</code> (đang đăng nhập đúng tài khoản Ads).
           </li>
+          <li>
+            Mở khung <b>Customer data use</b> → tick <b>Turn on enhanced conversions</b>. <b>Không</b> cần tick “Turn on
+            conversion-based customer lists”.
+          </li>
+          <li>
+            <b>Agree and save</b> → đọc điều khoản xử lý dữ liệu (Google Ads Data Processing Terms) → <b>Agree and continue</b>.
+          </li>
+        </ol>
+        <p className="text-sm text-muted">
+          Từ giữa 2026 Google gộp Enhanced conversions for web và for leads thành <b>một công tắc bật/tắt</b>, không còn bước chọn
+          phương thức (Google tag / Google Tag Manager / API). Tài khoản nào vẫn hiện ô chọn phương thức thì chọn{" "}
+          <b>Google Tag Manager</b>. Giao diện còn có thể đổi — tra “Set up enhanced conversions for web using Google Tag Manager” trên
+          Google Ads Help.
+        </p>
+
+        <h3>3. Google tag — cho phép nhận dữ liệu, nhưng KHÔNG tự dò form</h3>
+        <ol>
+          <li>
+            Mở cài đặt Google tag của Ads: Tag Assistant → mục <b>Tag Settings</b> → <b>Allow user-provided data capabilities</b>; hoặc
+            Google Ads → <b>Tools</b> → <b>Data manager</b> → <b>Google tag</b> → <b>Manage</b>.
+          </li>
+          <li>
+            Bật <b>Allow user-provided data capabilities</b>, nhưng <b>tắt</b> “Automatically detect user-provided data” — nếu không, Google
+            tag tự quét form checkout và gửi email/SĐT dù người dùng chưa tích ô đồng ý.
+          </li>
+        </ol>
+
+        <h3>4. GTM — gắn user_data vào tag Ads Conversion (Bài 6)</h3>
+        <ol>
+          <li>
+            Tạo biến <code>DLV - user_data</code>: Data Layer Variable, tên <code>user_data</code>, Version 2.
+          </li>
+          <li>
+            Tạo biến <code>UPD - user_data</code>: Variables → New → loại <b>User-Provided Data</b> → chọn <b>Code</b> → Data source:{" "}
+            <code>{"{{DLV - user_data}}"}</code> (object có sẵn <code>email</code>, <code>phone_number</code>). Cách khác:{" "}
+            <b>Manual configuration</b> → Email = <code>{"{{DLV - user_data.email}}"}</code>, Phone ={" "}
+            <code>{"{{DLV - user_data.phone_number}}"}</code>.
+          </li>
+          <li>
+            Mở tag <code>Ads - Conversion - Purchase</code> → mục <b>Event Parameters</b> → <b>Add parameter</b> → Event Parameter:{" "}
+            <code>user_data</code>, Value: <code>{"{{UPD - user_data}}"}</code>. (GTM bản cũ có ô tick “Include user-provided data from
+            your website” — bản mới đã bỏ, thay bằng tham số này.)
+          </li>
+          <li>Save tag → Preview.</li>
         </ol>
         <Check
           items={[
-            "Đặt hàng KHÔNG tích ô Enhanced Conversions → purchase không có user_data.",
-            "Tích ô + đã chấp nhận cookie → có user_data.",
+            "Đặt hàng KHÔNG tích ô Enhanced Conversions → dataLayer purchase không có user_data.",
+            "Tích ô + đã “Chấp nhận tất cả” cookie → purchase có user_data (email viết thường, SĐT +84…).",
+            "Tag Assistant, mốc purchase → tab Variables: UPD - user_data có email/SĐT; bấm hit Google Ads thấy dữ liệu người dùng đã được mã hoá (không phải email thô).",
+            "Không có hit “User provided data” nào trước khi người dùng đồng ý.",
           ]}
         />
       </Lesson>
 
       <Lesson id="bai-9">
         <ol>
+          <li>
+            Dọn container: mỗi ID chỉ một Google tag (xoá tag Google tự tạo bị trùng), tag Ads Conversion chỉ chạy ở{" "}
+            <code>CE - purchase</code>, đã tắt tự dò user-provided data. <b>Admin → Export Container</b> để sao lưu.
+          </li>
           <li>GTM → <b>Submit</b> → đặt tên version (vd. “v1 – GA4 ecommerce + Ads purchase”) → <b>Publish</b>. Chưa Publish thì tag chỉ chạy trong Preview.</li>
           <li>Điền thông tin người vận hành trong <code>lib/site-config.ts</code> (các trang chính sách báo đỏ nếu thiếu).</li>
           <li>Vercel → Settings → Environment Variables: <code>NEXT_GTM_ID</code> = ID container → Redeploy.</li>
-          <li>Trên tên miền thật: Preview GTM với URL mới, kiểm tra lại cả Bài 7.</li>
+          <li>Trên tên miền thật: Preview GTM với URL mới, kiểm tra lại cả Bài 7 (cửa sổ ẩn danh, từ chối → không có cookie _ga).</li>
+          <li>
+            GA4 → Admin → <b>Data filters</b> → bật filter <b>Developer traffic</b> (Active) để dữ liệu khi Preview/tập luyện không lẫn vào
+            báo cáo; hoặc dùng property GA4 riêng cho localhost (Lookup Table theo <code>{"{{Page Hostname}}"}</code>, Bài 3.5).
+          </li>
           <li>
             Mỗi khi thêm tag mới, cập nhật bảng trong <Link href="/cookies" className="text-accent underline">Chính sách cookie</Link>.
           </li>
@@ -1449,6 +1790,408 @@ Click quảng cáo ?gclid=… ─► Conversion Linker ─► cookie _gcl_aw ─
           Không chạy quảng cáo Google Ads thật có lời chào bán/giá/khuyến mại trỏ về cửa hàng demo — dễ bị khoá tài khoản vì vi phạm
           chính sách Misrepresentation.
         </p>
+      </Lesson>
+      <Lesson id="bai-10">
+        <p>
+          Mua hàng không phải hành động duy nhất đáng đo. Bài này đo thêm <b>đăng ký nhận email</b> (<code>generate_lead</code>),{" "}
+          <b>tạo tài khoản</b> (<code>sign_up</code>), <b>đăng nhập</b> (<code>login</code>) — rồi dùng chính dữ liệu Bài 4–5 để{" "}
+          <b>chạy quảng cáo nhắm lại người đã thêm giỏ mà chưa mua</b>.
+        </p>
+
+        <h3>1. Code — 4 chỗ TODO Bài 10</h3>
+        <p>
+          Form email ở chân trang và trang <Link href="/register" className="text-accent underline">/register</Link> (link “Tài khoản”
+          trên header) đã làm sẵn — trang đăng ký không có mật khẩu, tài khoản chỉ lưu trong trình duyệt.
+        </p>
+        <Code>{B10_LEAD}</Code>
+        <Code>{B10_SIGNUP}</Code>
+        <Code>{B10_SIGNUP_LEAD}</Code>
+        <Code>{B10_LOGIN}</Code>
+        <p className="text-sm text-muted">
+          Mỗi khối code = <b>một</b> chỗ TODO — dán đúng chỗ, đừng dán cả khối vào một chỗ (sẽ push trùng).
+        </p>
+        <ul>
+          <li>Push khi hành động <b>thành công</b> (sau khi “API” trả về), giống purchase.</li>
+          <li>
+            <b>Không</b> đưa email, tên, SĐT vào các event này. Muốn GA4 nhận ra người đã đăng nhập trên nhiều thiết bị thì dùng{" "}
+            <code>user_id</code> = mã nội bộ (trang /register hiện mã dạng <code>u_…</code>) — phần nâng cao, cài trong Configuration
+            settings của Google Tag.
+          </li>
+          <li>Tên event và tham số là tên chuẩn GA4 — xem <Link href="/lab/glossary#ten-chuan-khac" className="text-accent underline">Từ điển</Link>.</li>
+        </ul>
+
+        <h3>2. GTM — 2 tag riêng (không dùng tag ecommerce)</h3>
+        <p>
+          Các event này <b>không có object <code>ecommerce</code></b> nên tag <code>GA4 - Event - ecommerce</code> không dùng được. Tạo
+          biến đọc tham số ở <b>cấp ngoài cùng</b>:
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Biến</th>
+              <th>Data Layer Variable Name</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>DLV - lead_source</code></td><td><code>lead_source</code></td></tr>
+            <tr><td><code>DLV - value</code></td><td><code>value</code> (khác <code>ecommerce.value</code>)</td></tr>
+            <tr><td><code>DLV - currency</code></td><td><code>currency</code></td></tr>
+            <tr><td><code>DLV - method</code></td><td><code>method</code></td></tr>
+          </tbody>
+        </table>
+        <ol>
+          <li>
+            Trigger <code>CE - generate_lead</code> (Custom Event <code>generate_lead</code>) → tag <code>GA4 - Event - generate_lead</code>:
+            GA4 Event, Measurement ID <code>{"{{CONST - GA4 ID}}"}</code>, Event Name <code>generate_lead</code>, Event Parameters:{" "}
+            <code>lead_source</code>, <code>value</code>, <code>currency</code> = 3 biến trên.
+          </li>
+          <li>
+            Trigger <code>CE - account</code> (Custom Event, regex <code>^(sign_up|login)$</code>) → tag <code>GA4 - Event - account</code>:
+            Event Name <code>{"{{Event}}"}</code>, Event Parameter <code>method</code> = <code>{"{{DLV - method}}"}</code>.
+          </li>
+        </ol>
+        <Warn title="Vì sao tách 2 tag, không gộp 1 tag cho cả 3 event?">
+          <p>
+            dataLayer <b>nhớ</b> giá trị của lần push trước. Sau một <code>generate_lead</code> (có <code>value: 50000</code>), nếu tag
+            chung đọc <code>{"{{DLV - value}}"}</code> ở event <code>sign_up</code> thì vẫn ra 50000 → GA4 nhận sign_up kèm giá trị sai.
+            Tách tag: mỗi tag chỉ đọc tham số mà event của nó luôn tự push.
+          </p>
+        </Warn>
+        <p className="text-sm text-muted">
+          Google Ads (tuỳ chọn): tạo conversion action <b>Submit lead form</b> và <b>Sign-up</b>, <b>Count = One</b>, đặt{" "}
+          <b>Secondary</b> (purchase vẫn là mục tiêu tối ưu chính) → tag Ads Conversion riêng, trigger <code>CE - generate_lead</code>{" "}
+          / <code>CE - account</code>.
+        </p>
+
+        <h3>3. GA4 — đánh dấu key event</h3>
+        <p>
+          Làm thử mỗi hành động 1 lần (event phải tới GA4 mới hiện trong danh sách) → GA4 → Admin → Data display → <b>Events</b> → bật{" "}
+          <b>Mark as key event</b> cho <code>generate_lead</code> và <code>sign_up</code>.
+        </p>
+        <Check
+          items={[
+            "Gửi form email chân trang → generate_lead, lead_source = newsletter_footer, value là số.",
+            "Tạo tài khoản bằng email / bằng Google → sign_up với method = email / google; tick “Nhận email ưu đãi” → thêm generate_lead (register_form).",
+            "Đăng xuất → Đăng nhập lại → login.",
+            "Không event nào chứa email hay tên.",
+            "Tag Assistant: GA4 - Event - account ở sign_up/login gửi đúng method; GA4 - Event - generate_lead chỉ fire ở generate_lead.",
+          ]}
+        />
+
+        <h3>4. Remarketing — quảng cáo cho người bỏ giỏ</h3>
+        <Code>{B10_FLOW}</Code>
+        <ol>
+          <li>
+            <b>Liên kết GA4 ↔ Google Ads</b>: GA4 → Admin → <b>Product links → Google Ads links → Link</b> → chọn tài khoản Ads → bật{" "}
+            <b>Enable personalized advertising</b> → Submit. Sau khi link, <b>không</b> nhập <code>purchase</code> của GA4 làm chuyển
+            đổi Primary trong Ads (tag Ads đã đo rồi — tránh đếm 2 lần).
+          </li>
+          <li>
+            <b>Tạo Audience (Đối tượng) “Bỏ giỏ 14 ngày”</b> — tên menu ghi cả tiếng Anh / <i>tiếng Việt</i>:
+            <ol>
+              <li>
+                GA4 → <b>Admin</b> (<i>Quản trị</i>) → <b>Data display</b> (<i>Hiển thị dữ liệu</i>) → <b>Audiences</b> (
+                <i>Đối tượng</i>) → <b>New audience</b> (<i>Đối tượng mới</i>) → <b>Create a custom audience</b> (
+                <i>Tạo đối tượng tuỳ chỉnh</i>).
+              </li>
+              <li>
+                Góc trên bên trái, sửa “Untitled audience” (<i>Đối tượng không có tiêu đề</i>) thành <code>Bỏ giỏ 14 ngày</code>. Mô
+                tả: “Đã thêm giỏ, chưa mua — 14 ngày”.
+              </li>
+              <li>
+                Khung <b>Include users when</b> (<i>Bao gồm người dùng khi</i>) → <b>Add new condition</b> (
+                <i>Thêm điều kiện mới</i>) → gõ tìm và chọn sự kiện <code>add_to_cart</code>. Phạm vi để mặc định{" "}
+                <b>Across all sessions</b> (<i>Trên mọi phiên</i>). Muốn nhóm “nóng” hơn: dùng <code>begin_checkout</code>.
+              </li>
+              <li>
+                Bấm <b>Add group to exclude</b> (<i>Thêm nhóm để loại trừ</i>) → chọn{" "}
+                <b>Temporarily exclude users when</b> (<i>Tạm thời loại trừ người dùng khi</i>) → <b>Add new condition</b> → sự kiện{" "}
+                <code>purchase</code>.
+                <span className="text-sm text-muted">
+                  {" "}“Tạm thời”: người vừa mua bị loại ra, nhưng nếu sau này lại thêm giỏ mà không mua thì vào lại danh sách.
+                  “Vĩnh viễn” (<i>Permanently</i>): đã mua một lần là không bao giờ vào nữa — không hợp với bỏ giỏ.
+                </span>
+              </li>
+              <li>
+                <b>Membership duration</b> (<i>Thời hạn thành viên</i>) → <b>Set to maximum limit</b> bỏ chọn → nhập <b>14</b> ngày. Người
+                bỏ giỏ “nguội” nhanh; quá 14 ngày không thêm giỏ lại thì tự rời danh sách.
+              </li>
+              <li>
+                <b>Audience trigger</b> (<i>Trình kích hoạt đối tượng</i>): bỏ qua. → <b>Save</b> (<i>Lưu</i>).
+              </li>
+            </ol>
+            <p className="text-sm text-muted">
+              Khung <b>Summary</b> (<i>Tóm tắt</i>) bên phải ước tính số người khớp điều kiện — website tập luyện sẽ hiện rất ít hoặc
+              “không đủ dữ liệu”, bình thường. Danh sách cần thời gian để đủ người nên <b>tạo sớm</b>; sau 24–48 giờ (khi đã liên kết GA4 ↔
+              Ads) hiện trong Google Ads → <b>Tools → Shared library → Audience manager</b> với nguồn là Google Analytics.
+            </p>
+          </li>
+          <li>
+            Thêm vài nhóm hữu ích: <i>Xem sản phẩm chưa thêm giỏ</i> (<code>view_item</code>, loại <code>add_to_cart</code>),{" "}
+            <i>Đăng ký email chưa mua</i> (<code>generate_lead</code>, loại <code>purchase</code>), <i>Đã mua 30 ngày</i> (để{" "}
+            <b>loại trừ</b> khỏi quảng cáo khuyến mãi).
+          </li>
+        </ol>
+        <table>
+          <thead>
+            <tr>
+              <th>Chạy quảng cáo bằng</th>
+              <th>Khi nào</th>
+              <th>Cài đặt chính</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Display / Demand Gen</b></td>
+              <td>Phổ biến nhất</td>
+              <td>New campaign → Sales → Display/Demand Gen → Audience segments → Your data → <code>Bỏ giỏ 14 ngày</code> → <b>Targeting</b></td>
+            </tr>
+            <tr>
+              <td><b>Dynamic remarketing</b></td>
+              <td>Hiện đúng sản phẩm khách đã bỏ giỏ</td>
+              <td>Cần Google Merchant Center; <code>item_id</code> trong event (vd. <code>SKU-SOFA-001</code>) phải khớp mã sản phẩm trong feed</td>
+            </tr>
+            <tr>
+              <td><b>Search (RLSA)</b></td>
+              <td>Khách quay lại tìm trên Google</td>
+              <td>Thêm audience vào chiến dịch Search ở chế độ <b>Observation</b>, tăng giá thầu cho nhóm này</td>
+            </tr>
+            <tr>
+              <td><b>Performance Max</b></td>
+              <td>Để Google tự tối ưu</td>
+              <td>Dùng audience làm <b>Audience signal</b> (gợi ý, không giới hạn cứng)</td>
+            </tr>
+          </tbody>
+        </table>
+        <ul>
+          <li>Danh sách cần đủ lớn: khoảng <b>100</b> người dùng hoạt động/30 ngày cho Display, khoảng <b>1.000</b> cho Search.</li>
+          <li>Luôn <b>loại trừ người đã mua</b>; đặt giới hạn tần suất (vd. 3 lần/ngày) để không làm phiền.</li>
+          <li>
+            Người đăng ký email đã <b>đồng ý nhận quảng cáo</b> có thể dùng thêm <b>Customer Match</b> (tải danh sách email lên Google
+            Ads) — phải đúng chính sách Google và luật dữ liệu cá nhân.
+          </li>
+          <li>Chính sách bảo mật / cookie phải nói rõ có remarketing.</li>
+        </ul>
+        <Warn title="Lab: chỉ tạo Audience, KHÔNG chạy quảng cáo thật">
+          <p>
+            Cửa hàng demo có giá, nút mua nhưng không bán thật → chạy quảng cáo trỏ về đây dễ bị khoá tài khoản (Misrepresentation). Trên
+            lab, bạn tạo được Audience và xem cài đặt; danh sách sẽ không đủ người để chạy. Áp dụng cho website thật.
+          </p>
+        </Warn>
+
+        <h3>Tự kiểm tra hiểu bài</h3>
+        <ul>
+          <li>Vì sao đẩy <code>user_id</code> là mã nội bộ chứ không phải email?</li>
+          <li>Audience “Bỏ giỏ 14 ngày” có tự loại người vừa mua hôm qua không? Nếu đặt Exclude là “Permanently” thì khác gì?</li>
+          <li>Người đã bấm “Từ chối tất cả” cookie có vào danh sách remarketing không? Vì sao?</li>
+        </ul>
+      </Lesson>
+
+      <Lesson id="bai-11">
+        <p>
+          Trang <Link href="/maps" className="text-accent underline">/maps</Link> (link “Showroom” trên header) là trang showroom: bản đồ,
+          giờ mở cửa, nút <b>Chỉ đường</b> và <b>Gọi</b>. Bài này đo 2 nút đó <b>không cần viết code</b> — dùng trigger Click của GTM —
+          rồi xem quảng cáo Google Maps hoạt động thế nào.
+        </p>
+        <Code>{B11_FLOW}</Code>
+        <Warn title="Quảng cáo Maps cần showroom THẬT">
+          <p>
+            Quảng cáo trên Google Maps lấy địa chỉ từ <b>Google Business Profile đã xác minh</b>. Tạo Business Profile cho cửa hàng
+            không có thật (như Nhà Mộc) là vi phạm quy định của Google — hồ sơ bị gỡ, tài khoản có thể bị khoá. Trên lab: làm phần
+            GTM + GA4 + conversion; phần chạy quảng cáo (mục 5) áp dụng cho cửa hàng thật của bạn.
+          </p>
+        </Warn>
+
+        <h3>1. Trang /maps có gì</h3>
+        <Code>{B11_LINKS}</Code>
+        <ul>
+          <li>
+            Hai nút là thẻ <code>&lt;a&gt;</code> bình thường → trigger <b>Click - Just Links</b> bắt được. Thuộc tính{" "}
+            <code>data-store-id</code> cho biết khách bấm ở showroom nào.
+          </li>
+          <li>
+            Link Chỉ đường dùng chuẩn <b>Maps URLs</b> (<code>google.com/maps/dir/?api=1&amp;destination=…</code>), không cần API key.
+            Link Gọi dùng <code>tel:</code> — trên máy Mac có thể bật hộp thoại FaceTime, bấm Huỷ (số minh hoạ, không gọi được ai).
+          </li>
+          <li>
+            Bản đồ nhúng chỉ tải khi bấm <b>Tải bản đồ</b> vì iframe Google Maps đặt cookie của Google — đã ghi vào{" "}
+            <Link href="/cookies" className="text-accent underline">Chính sách cookie</Link>.
+          </li>
+        </ul>
+
+        <h3>2. GTM — đo click không cần code</h3>
+        <ol>
+          <li>
+            <b>Variables → Built-In Variables → Configure</b> → tick nhóm <b>Clicks</b>: <code>Click Element</code>,{" "}
+            <code>Click URL</code>, <code>Click Text</code>.
+          </li>
+          <li>
+            <b>User-Defined Variables → New</b> → loại <b>Auto-Event Variable</b> → Variable Type <b>Element Attribute</b> → Attribute
+            name <code>data-store-id</code> → tên <code>AEV - store_id</code>.
+          </li>
+          <li>
+            Trigger <code>Click - Chỉ đường</code>: loại <b>Click - Just Links</b> → bỏ tick <b>Wait for Tags</b> và{" "}
+            <b>Check Validation</b> → <b>Some Link Clicks</b> → <code>Click URL</code> <b>contains</b>{" "}
+            <code>google.com/maps/dir</code>.
+          </li>
+          <li>
+            Trigger <code>Click - Gọi điện</code>: <b>Click - Just Links</b> → <b>Some Link Clicks</b> → <code>Click URL</code>{" "}
+            <b>starts with</b> <code>tel:</code>.
+          </li>
+          <li>
+            Tag <code>GA4 - Event - get_directions</code>: GA4 Event, Measurement ID <code>{"{{CONST - GA4 ID}}"}</code>, Event Name{" "}
+            <code>get_directions</code>, Event Parameter <code>store_id</code> = <code>{"{{AEV - store_id}}"}</code>, trigger{" "}
+            <code>Click - Chỉ đường</code>.
+          </li>
+          <li>
+            Tag <code>GA4 - Event - click_to_call</code>: giống trên, Event Name <code>click_to_call</code>, trigger{" "}
+            <code>Click - Gọi điện</code>.
+          </li>
+        </ol>
+        <ul className="text-sm text-muted">
+          <li>
+            GA4 <b>không có tên chuẩn</b> cho 2 hành động này → tự đặt, giữ chữ thường + gạch dưới như tên chuẩn.
+          </li>
+          <li>
+            Không trigger “All Link Clicks”: tag sẽ chạy ở <b>mọi</b> link (menu, sản phẩm…).
+          </li>
+          <li>
+            GA4 <b>Enhanced measurement → Outbound clicks</b> vẫn tự ghi thêm event <code>click</code> cho link Chỉ đường (link ra
+            google.com). Không trùng — khác tên event, nhưng chỉ <code>get_directions</code> có <code>store_id</code>.
+          </li>
+          <li>
+            Trigger click dễ hỏng khi đổi giao diện (đổi link, đổi chữ). Website lớn nên dùng <code>dataLayer.push</code> như Bài 10;
+            bài này dùng click để biết thêm cách làm không cần lập trình viên.
+          </li>
+        </ul>
+
+        <h3>3. GA4 — thêm phương diện “Showroom”</h3>
+        <ol>
+          <li>
+            GA4 → <b>Admin</b> (<i>Quản trị</i>) → <b>Data display</b> (<i>Hiển thị dữ liệu</i>) → <b>Custom definitions</b> (
+            <i>Định nghĩa tuỳ chỉnh</i>) → <b>Create custom dimension</b> (<i>Tạo phương diện tuỳ chỉnh</i>).
+          </li>
+          <li>
+            Dimension name <code>Showroom</code>, Scope <b>Event</b> (<i>Sự kiện</i>), Event parameter <code>store_id</code> → Save.
+          </li>
+          <li>
+            Từ lúc tạo trở đi, báo cáo và Explore có thêm cột “Showroom” → biết showroom nào được bấm chỉ đường nhiều. Không áp dụng
+            ngược cho dữ liệu cũ; cần 24–48 giờ mới thấy trong báo cáo.
+          </li>
+          <li>
+            Tuỳ chọn: đánh dấu <code>get_directions</code> là <b>key event</b> (Admin → Events, như Bài 10).
+          </li>
+        </ol>
+
+        <h3>4. Google Ads — conversion “Chỉ đường” trên website</h3>
+        <p>
+          Làm giống Bài 6 (Goals → Conversions → Summary → <b>+ Create conversion action</b> → Website → tạo thủ công), khác ở các ô:
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Ô</th>
+              <th>Chọn</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Goal and action optimization</td><td><b>Get directions</b></td></tr>
+            <tr><td>Conversion name</td><td><code>Get directions - website</code></td></tr>
+            <tr><td>Value</td><td>Không dùng giá trị, hoặc một con số ước tính cố định</td></tr>
+            <tr><td>Count</td><td><b>One</b> — một người bấm 5 lần vẫn là một ý định đến showroom</td></tr>
+            <tr><td>Primary / Secondary</td><td><b>Secondary</b> (chỉ theo dõi), trừ khi chiến dịch nhằm kéo khách tới cửa hàng</td></tr>
+          </tbody>
+        </table>
+        <p>
+          GTM: tag <b>Google Ads Conversion Tracking</b> với Conversion ID / Label mới, trigger <code>Click - Chỉ đường</code>. Gọi
+          điện: tạo thêm action loại <b>Phone call lead</b> hoặc <b>Contact</b>, trigger <code>Click - Gọi điện</code>.
+        </p>
+        <Check
+          items={[
+            "Preview → /maps → bấm Chỉ đường: mốc Link Click, tag GA4 - Event - get_directions Fired, store_id = hn-hoan-kiem.",
+            "Bấm Chỉ đường của showroom TP.HCM: store_id = hcm-quan-1.",
+            "Bấm Gọi: chỉ GA4 - Event - click_to_call fire, get_directions không fire.",
+            "Bấm link menu, sản phẩm: không tag nào của Bài 11 fire.",
+            "DebugView: get_directions có tham số store_id.",
+          ]}
+        />
+
+        <h3>5. Chạy quảng cáo Google Maps (cửa hàng thật)</h3>
+        <ol>
+          <li>
+            <b>Google Business Profile</b> (business.google.com): tạo hồ sơ cho cửa hàng thật, đúng tên + địa chỉ + số điện thoại, và{" "}
+            <b>xác minh</b> theo cách Google yêu cầu. Tên, địa chỉ, SĐT trên website (trang Showroom) nên khớp hồ sơ.
+          </li>
+          <li>
+            Liên kết vào Google Ads: <b>Tools → Shared library → Location manager</b> → nút <b>+</b> → <b>Our locations</b> → Continue
+            → <b>Google Business Profile</b> → chọn tài khoản Business Profile Manager → Continue → lọc theo tên nếu cần → <b>Save</b>.
+            Các địa chỉ trở thành <b>location assets</b> (tiện ích vị trí).
+          </li>
+          <li>Tạo chiến dịch thuộc một trong các loại có thể hiện trên Maps (bảng dưới), đặt vùng nhắm quanh showroom.</li>
+        </ol>
+        <table>
+          <thead>
+            <tr>
+              <th>Dạng quảng cáo trên Maps</th>
+              <th>Hiện ở đâu</th>
+              <th>Từ loại chiến dịch</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Promoted pins</b></td>
+              <td>Ghim vuông trên bản đồ, cả dọc đường khi chỉ đường</td>
+              <td>Performance Max (store goals), Demand Gen, Smart</td>
+            </tr>
+            <tr>
+              <td><b>Map search ads</b></td>
+              <td>Đầu danh sách kết quả khi tìm trên Maps</td>
+              <td>Search có location assets, Performance Max (store goals), Smart, Shopping</td>
+            </tr>
+            <tr>
+              <td><b>Map suggest ads</b></td>
+              <td>Gợi ý khi đang gõ (chỉ app Google Maps)</td>
+              <td>Search, Performance Max (store goals), Smart</td>
+            </tr>
+            <tr>
+              <td><b>Placesheet ads</b></td>
+              <td>Trong trang chi tiết một địa điểm</td>
+              <td>Performance Max (store goals), Travel</td>
+            </tr>
+          </tbody>
+        </table>
+        <ul>
+          <li>
+            <b>Không chạy được quảng cáo CHỈ trên Maps</b> — chiến dịch luôn hiện cả trên Search, YouTube… Cách đơn giản nhất để bắt
+            đầu: chiến dịch <b>Search</b> có location assets.
+          </li>
+          <li>
+            Tiền: Search tính theo click (CPC) khi khách bấm chỉ đường, gọi, vào website. Ghim logo của Performance Max (store goals)
+            thường tính theo lượt hiển thị.
+          </li>
+          <li>
+            Bấm chỉ đường / gọi <b>ngay trên quảng cáo</b> do Google đo trong Google Ads (không qua GTM). <b>Store visits</b> (lượt
+            đến cửa hàng) chỉ có khi tài khoản đủ điều kiện của Google — Google tự bật.
+          </li>
+          <li>
+            Xem chi tiết:{" "}
+            <a className="text-accent underline" href="https://support.google.com/google-ads/answer/16388390" target="_blank" rel="noreferrer">
+              About advertising in Google Maps
+            </a>
+            ,{" "}
+            <a className="text-accent underline" href="https://support.google.com/google-ads/answer/2404182" target="_blank" rel="noreferrer">
+              About location assets
+            </a>
+            .
+          </li>
+        </ul>
+
+        <h3>Tự kiểm tra hiểu bài</h3>
+        <ul>
+          <li>Vì sao trigger dùng “Some Link Clicks” chứ không “All Link Clicks”?</li>
+          <li>Khách bấm Chỉ đường ngay trên ghim quảng cáo Maps, không vào website — GTM có thấy không? Ai đo?</li>
+          <li>Tạo phương diện “Showroom” hôm nay thì dữ liệu tuần trước có cột này không?</li>
+        </ul>
       </Lesson>
     </article>
   );

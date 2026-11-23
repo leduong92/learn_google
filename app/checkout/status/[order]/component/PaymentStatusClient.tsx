@@ -44,20 +44,8 @@ export default function PaymentStatusClient({ order }: { order: string }) {
           cartStore.set({ lines: [], coupon: "" }); // thanh toán xong mới xoá giỏ
           setOrderData(res.data);
           setFinalStatus("authorized");
-          // TODO Bài 5 (chỗ 2/2) — gửi purchase ở đây: gọi trackPurchase(...) (đã import sẵn ở đầu file)
-          //   Truyền dữ liệu API VỪA trả về. Đừng dùng orderData — xem khung ⚠ ở Bài 5 để biết vì sao.
-          if (!isMounted) return;
-
-          if (res.isSuccess) {
-            const status = res.data.orderStatusLabel.toLowerCase();
-            if (status === "authorized" || status === "paid") {
-              cartStore.set({ lines: [], coupon: "" }); // thanh toán xong mới xoá giỏ
-              setOrderData(res.data);
-              setFinalStatus("authorized");
-              trackPurchase(res.data); // ✅ res.data — KHÔNG phải orderData
-              return;
-            }
-          }
+          // Bài 5 — res.data (dữ liệu API vừa trả về), KHÔNG phải orderData (state cũ)
+          trackPurchase(res.data);
           return;
         }
         if (status === "failed") {
